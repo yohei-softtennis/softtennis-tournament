@@ -107,6 +107,15 @@ const SHARED = [
 "    r++;",
 "  }",
 "  return rounds;}",
+"function circledNum(n){var c='①②③④⑤⑥⑦⑧⑨';return n>=1&&n<=9?c.charAt(n-1):String(n);}",
+"function annotateLabels(rounds,slotSrc){",
+"  rounds.forEach(function(matches,r){",
+"    matches.forEach(function(m,i){",
+"      if(m.a==null)m.la=(r===0)?(slotSrc?slotSrc[i*2]:null):(roundName(rounds.length,r-1)+circledNum(i*2+1)+'の勝者');",
+"      if(m.b==null)m.lb=(r===0)?(slotSrc?slotSrc[i*2+1]:null):(roundName(rounds.length,r-1)+circledNum(i*2+2)+'の勝者');",
+"    });",
+"  });",
+"}",
 "function roundName(total,r){var fe=total-1-r;if(fe===0)return '決勝';if(fe===1)return '準決勝';if(fe===2)return '準々決勝';return (r+1)+'回戦';}",
 "function buildView(t){",
 "  if(!t)return null;",
@@ -119,14 +128,15 @@ const SHARED = [
 "      var ms=leagueMatchList(ids).map(function(m){var sc=t.leagueScores[m.key];return {a:m.a,b:m.b,key:m.key,ga:sc?sc.ga:null,gb:sc?sc.gb:null,winner:sc?(sc.ga>sc.gb?m.a:(sc.gb>sc.ga?m.b:null)):null};});",
 "      view.leagues.push({index:li,pairIds:ids,standings:st,matches:ms});",
 "    }",
-"    var ordered=[];",
-"    for(var rank=0;rank<t.advanceCount;rank++){view.leagues.forEach(function(lg){var done=lg.matches.length>0&&lg.matches.every(function(m){return m.ga!=null&&m.gb!=null;});ordered.push(done&&lg.standings[rank]?lg.standings[rank].id:null);});}",
+"    var ordered=[];var srcs=[];",
+"    for(var rank=0;rank<t.advanceCount;rank++){view.leagues.forEach(function(lg){var done=lg.matches.length>0&&lg.matches.every(function(m){return m.ga!=null&&m.gb!=null;});ordered.push(done&&lg.standings[rank]?lg.standings[rank].id:null);srcs.push(String.fromCharCode(65+lg.index)+'リーグ'+(rank+1)+'位');});}",
 "    view.qualifiers=ordered;",
 "    if(ordered.length===0){view.bracket={slots:[],rounds:[]};}",
-"    else{var B=nextPow2(Math.max(2,ordered.length));var pos=seedPositions(B);var slots=pos.map(function(si){return si<ordered.length?ordered[si]:'BYE';});view.bracket={slots:slots,rounds:computeBracket(slots,t.bracketScores)};}",
+"    else{var B=nextPow2(Math.max(2,ordered.length));var pos=seedPositions(B);var slots=pos.map(function(si){return si<ordered.length?ordered[si]:'BYE';});var rounds=computeBracket(slots,t.bracketScores);annotateLabels(rounds,pos.map(function(si){return si<ordered.length?srcs[si]:null;}));view.bracket={slots:slots,rounds:rounds};}",
 "  }else{",
 "    var slots=t.bracketSlots||[];",
-"    view.bracket={slots:slots,rounds:computeBracket(slots,t.bracketScores)};",
+"    var roundsT=computeBracket(slots,t.bracketScores);annotateLabels(roundsT,null);",
+"    view.bracket={slots:slots,rounds:roundsT};",
 "  }",
 "  return view;}",
 "function shuffleArr(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}return a;}",
@@ -358,12 +368,12 @@ function render(){
   app.innerHTML=html;
 }
 function bmatchHtml(t,m){
-  function row(v,sc,isWin){
+  function row(v,sc,isWin,label){
     if(v==='BYE')return '<div class="row bye"><span>不戦勝（BYE）</span><span class="sc"></span></div>';
-    if(v==null)return '<div class="row bye"><span>未定</span><span class="sc"></span></div>';
+    if(v==null)return '<div class="row bye"><span>'+(label?esc(label):'未定')+'</span><span class="sc"></span></div>';
     return '<div class="row'+(isWin?' win':'')+'"><span class="'+(isWin?'winname':'')+'">'+pairName(t,v)+(pairTeam(t,v)?' <small>（'+pairTeam(t,v)+'）</small>':'')+'</span><span class="sc'+(isWin?' win':'')+'">'+(sc==null?'':sc)+'</span></div>';
   }
-  return '<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null)+row(m.b,m.gb,m.winner===m.b&&m.b!=null)+'</div>';
+  return '<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null,m.la)+row(m.b,m.gb,m.winner===m.b&&m.b!=null,m.lb)+'</div>';
 }
 function load(){
   var tid=new URLSearchParams(location.search).get('id');
@@ -673,12 +683,12 @@ function bracketSection(v){
   return h;
 }
 function bmatchAdminHtml(m){
-  function row(v,sc,isWin){
+  function row(v,sc,isWin,label){
     if(v==='BYE')return '<div class="row bye"><span>不戦勝（BYE）</span><span class="sc"></span></div>';
-    if(v==null)return '<div class="row bye"><span>未定</span><span class="sc"></span></div>';
+    if(v==null)return '<div class="row bye"><span>'+(label?esc(label):'未定')+'</span><span class="sc"></span></div>';
     return '<div class="row'+(isWin?' win':'')+'"><span class="'+(isWin?'winname':'')+'">'+pairName(T,v)+'</span><span class="sc'+(isWin?' win':'')+'">'+(sc==null?'':sc)+'</span></div>';
   }
-  var h='<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null)+row(m.b,m.gb,m.winner===m.b&&m.b!=null);
+  var h='<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null,m.la)+row(m.b,m.gb,m.winner===m.b&&m.b!=null,m.lb);
   if(typeof m.a==='number'&&typeof m.b==='number'){
     h+='<div style="text-align:center;margin-top:4px">'+scoreInputs('br',m.key,m.a,m.b,m.ga,m.gb)+'</div>';
   }else if(m.winner!=null&&m.winner!=='BYE'){
