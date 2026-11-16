@@ -434,8 +434,8 @@ function tournamentForm(isNew){
   h+='<label class="f">大会方式</label><select id="f_format" onchange="toggleLeagueFields()"><option value="league_tournament"'+(t.format==='league_tournament'?' selected':'')+'>リーグ戦 → トーナメント</option><option value="tournament"'+(t.format==='tournament'?' selected':'')+'>トーナメントのみ</option></select>';
   h+='<label class="f">参加ペア数</label><span class="stepper"><button type="button" onclick="stepCount(-1)">−</button><input type="number" id="f_count" value="'+t.pairCount+'" min="2" max="128"><button type="button" onclick="stepCount(1)">＋</button></span>';
   h+='<div id="league_fields">';
-  h+='<label class="f">1リーグのペア数</label><span class="stepper"><button type="button" onclick="stepField(\'f_ppl\',-1)">−</button><input type="number" id="f_ppl" value="'+t.pairsPerLeague+'" min="3" max="16"><button type="button" onclick="stepField(\'f_ppl\',1)">＋</button></span>';
-  h+='<label class="f">トーナメント進出数（各リーグ上位）</label><span class="stepper"><button type="button" onclick="stepField(\'f_adv\',-1)">−</button><input type="number" id="f_adv" value="'+t.advanceCount+'" min="1" max="4"><button type="button" onclick="stepField(\'f_adv\',1)">＋</button></span>';
+  h+='<label class="f">1リーグのペア数</label><span class="stepper"><button type="button" onclick="stepField(\\'f_ppl\\',-1)">−</button><input type="number" id="f_ppl" value="'+t.pairsPerLeague+'" min="3" max="16"><button type="button" onclick="stepField(\\'f_ppl\\',1)">＋</button></span>';
+  h+='<label class="f">トーナメント進出数（各リーグ上位）</label><span class="stepper"><button type="button" onclick="stepField\(\\'f_adv\\',-1)">−</button><input type="number" id="f_adv" value="'+t.advanceCount+'" min="1" max="4"><button type="button" onclick="stepField\(\\'f_adv\\',1)">＋</button></span>';
   h+='</div>';
   h+='<div id="msg"></div>';
   if(isNew){h+='<p><button onclick="doCreate()">この内容で大会を作成</button></p>';}
@@ -476,9 +476,9 @@ function pairsForm(){
   h+='<div class="hint">ペア名（選手名ペア）と所属（チーム名）を入力してください。「強者」にチェックしたペアはシード扱いで、割り振りで分散されます。入力すると自動で保存されます。</div><br>';
   T.pairs.forEach(function(p,i){
     h+='<div class="pairrow"><span class="no">'+(i+1)+'.</span>'
-      +'<input type="text" placeholder="ペア名（例：山田・佐藤）" value="'+esc(p.name)+'" onchange="pairEdit('+p.id+',\'name\',this.value)">'
-      +'<input type="text" class="teamin" placeholder="所属（例：〇〇中）" value="'+esc(p.team)+'" onchange="pairEdit('+p.id+',\'team\',this.value)">'
-      +'<label><input type="checkbox" '+(p.seed?'checked':'')+' onchange="pairEdit('+p.id+',\'seed\',this.checked)"> 強者</label></div>';
+      +'<input type="text" placeholder="ペア名（例：山田・佐藤）" value="'+esc(p.name)+'" onchange="pairEdit('+p.id+',\\'name\\',this.value)">'
+      +'<input type="text" class="teamin" placeholder="所属（例：〇〇中）" value="'+esc(p.team)+'" onchange="pairEdit('+p.id+',\\'team\\',this.value)">'
+      +'<label><input type="checkbox" '+(p.seed?'checked':'')+' onchange="pairEdit('+p.id+',\\'seed\\',this.checked)"> 強者</label></div>';
   });
   h+='</div>';
   return h;
@@ -502,8 +502,8 @@ function chipHtml(label,sub,cls,onclick){
 }
 function assignSection(){
   var h='<div class="card"><h2>割り振り</h2>';
-  h+='<label><input type="checkbox" '+(T.separateTeams?'checked':'')+' onchange="ruleEdit(\'separateTeams\',this.checked)"> 同所属を離す</label>　'
-    +'<label><input type="checkbox" '+(T.separateSeeds?'checked':'')+' onchange="ruleEdit(\'separateSeeds\',this.checked)"> 強者を離す</label>';
+  h+='<label><input type="checkbox" '+(T.separateTeams?'checked':'')+' onchange="ruleEdit(\\'separateTeams\\',this.checked)"> 同所属を離す</label>　'
+    +'<label><input type="checkbox" '+(T.separateSeeds?'checked':'')+' onchange="ruleEdit(\\'separateSeeds\\',this.checked)"> 強者を離す</label>';
   h+='<p><button onclick="doRandom()">ランダム割り振り</button> <span class="hint">ペアをタップで選んで、もう一方をタップすると入れ替え／移動ができます</span></p>';
   var pool=unassignedIds();
   h+='<h3>未配置のペア</h3><div class="chips">';
@@ -586,9 +586,9 @@ function placeFromSelection(target){
 
 /* ---------- 結果入力 ---------- */
 function scoreInputs(prefix,key,a,b,ga,gb){
-  return '<input type="number" class="scoreinput" id="'+prefix+'-'+key+'-a" min="0" max="99" value="'+(ga==null?'':ga)+'" onchange="scoreEdit(\''+prefix+'\',\''+key+'\','+a+','+b+')">'
+  return '<input type="number" class="scoreinput" id="'+prefix+'-'+key+'-a" min="0" max="99" value="'+(ga==null?'':ga)+'" onchange="scoreEdit(\\''+prefix+'\\',\\''+key+'\\','+a+','+b+')">'
     +' － '
-    +'<input type="number" class="scoreinput" id="'+prefix+'-'+key+'-b" min="0" max="99" value="'+(gb==null?'':gb)+'" onchange="scoreEdit(\''+prefix+'\',\''+key+'\','+a+','+b+')">';
+    +'<input type="number" class="scoreinput" id="'+prefix+'-'+key+'-b" min="0" max="99" value="'+(gb==null?'':gb)+'" onchange="scoreEdit(\\''+prefix+'\\',\\''+key+'\\','+a+','+b+')">';
 }
 function scoreEdit(prefix,key,a,b){
   var ea=document.getElementById(prefix+'-'+key+'-a'),eb=document.getElementById(prefix+'-'+key+'-b');
