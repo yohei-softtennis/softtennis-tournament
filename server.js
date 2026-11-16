@@ -112,7 +112,7 @@ const SHARED = [
 "      view.leagues.push({index:li,pairIds:ids,standings:st,matches:ms});",
 "    }",
 "    var ordered=[];",
-"    for(var rank=0;rank<t.advanceCount;rank++){view.leagues.forEach(function(lg){if(lg.standings[rank])ordered.push(lg.standings[rank].id);});}",
+"    for(var rank=0;rank<t.advanceCount;rank++){view.leagues.forEach(function(lg){var done=lg.matches.length>0&&lg.matches.every(function(m){return m.ga!=null&&m.gb!=null;});ordered.push(done&&lg.standings[rank]?lg.standings[rank].id:null);});}",
 "    view.qualifiers=ordered;",
 "    if(ordered.length===0){view.bracket={slots:[],rounds:[]};}",
 "    else{var B=nextPow2(Math.max(2,ordered.length));var pos=seedPositions(B);var slots=pos.map(function(si){return si<ordered.length?ordered[si]:'BYE';});view.bracket={slots:slots,rounds:computeBracket(slots,t.bracketScores)};}",
@@ -234,6 +234,8 @@ button:disabled{opacity:.5;}
 .stepper button{width:36px;height:36px;padding:0;font-size:18px;}
 label.f{display:block;margin:10px 0 4px;font-size:13px;color:var(--dark);font-weight:bold;}
 .hint{font-size:12px;color:var(--gray);}
+.adminlink{text-align:center;padding:20px 0 28px;font-size:13px;}
+.adminlink a{color:var(--dark);}
 .err{color:#b3261e;font-size:13px;}
 .ok{color:var(--green);font-size:13px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;min-height:38px;padding:6px;border:1px dashed var(--border);border-radius:8px;background:#fbfefc;}
@@ -268,6 +270,7 @@ const VIEWER_HTML = `<!DOCTYPE html>
   <div class="sub" id="subtitle">読み込み中…</div>
 </header>
 <main id="app"></main>
+<footer class="adminlink"><a href="/admin">管理者ページへ（パスワードが必要です）</a></footer>
 <script>
 ${SHARED}
 var state=null;
@@ -293,7 +296,7 @@ function render(){
       lg.standings.forEach(function(r,idx){
         html+='<tr class="'+(idx<t.advanceCount?'qualify':'')+(idx===0?' rank1':'')+'"><td>'+(idx+1)+'</td><td class="name">'+pairName(t,r.id)+(pairTeam(t,r.id)?' <small>（'+pairTeam(t,r.id)+'）</small>':'')+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td><td>'+(r.diff>0?'+':'')+r.diff+'</td></tr>';
       });
-      html+='</table><div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（暫定順位で反映されます）</div>';
+      html+='</table><div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（リーグの全試合が終わると確定します）</div>';
       html+='<h3>対戦結果</h3>';
       if(lg.matches.length===0){html+='<div class="hint">対戦はまだありません</div>';}
       lg.matches.forEach(function(m){
@@ -595,8 +598,8 @@ function scoreEdit(prefix,key,a,b){
   var va=ea.value===''?null:parseInt(ea.value,10),vb=eb.value===''?null:parseInt(eb.value,10);
   var store=(prefix==='lg')?T.leagueScores:T.bracketScores;
   if(va===null&&vb===null){delete store[key];save();return;}
-  if(va===null||vb===null){showMsg('スコアは両方入力してください',true);renderApp();return;}
-  if(va===vb){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);renderApp();return;}
+  if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
+  if(va===vb){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);return;}
   store[key]={a:a,b:b,ga:va,gb:vb};
   save();
 }
