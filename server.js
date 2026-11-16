@@ -77,7 +77,17 @@ const SHARED = [
 "function pairById(t,id){for(var i=0;i<t.pairs.length;i++){if(t.pairs[i].id===id)return t.pairs[i];}return null;}",
 "function registeredPairs(t){return t.pairs.filter(function(p){return p.name&&p.name.trim()!=='';});}",
 "function leagueCount(t){var N=t.pairCount;var L=Math.max(1,Math.ceil(N/Math.max(1,t.pairsPerLeague)));if(N>5){while(L>1&&Math.floor(N/L)<3)L--;}return L;}",
-"function leagueMatchList(ids){var ms=[];for(var i=0;i<ids.length;i++){for(var j=i+1;j<ids.length;j++){ms.push({a:ids[i],b:ids[j],key:ids[i]+'|'+ids[j]});}}return ms;}",
+"function leagueMatchList(ids){",
+"  if(ids.length<2)return [];",
+"  var pos={};ids.forEach(function(id,i){pos[id]=i;});",
+"  var arr=ids.slice();if(arr.length%2===1)arr.push(null);",
+"  var n=arr.length;var cur=arr.slice();var ms=[];",
+"  for(var round=0;round<n-1;round++){",
+"    for(var i=0;i<n/2;i++){var x=cur[i],y=cur[n-1-i];if(x!=null&&y!=null){var a=pos[x]<pos[y]?x:y;var b=(a===x)?y:x;ms.push({a:a,b:b,key:a+'|'+b});}}",
+"    var next=[cur[0],cur[n-1]];for(var k=1;k<n-1;k++)next.push(cur[k]);cur=next;",
+"  }",
+"  return ms;",
+"}",
 "function computeStandings(t,ids){",
 "  var rows={};ids.forEach(function(id){rows[id]={id:id,w:0,l:0,gf:0,ga:0,diff:0};});",
 "  var ms=leagueMatchList(ids);",
@@ -221,7 +231,7 @@ const SHARED = [
 "function matchQueue(t,v){",
 "  var q=[];",
 "  var maxM=0;(v.leagues||[]).forEach(function(lg){if(lg.matches.length>maxM)maxM=lg.matches.length;});",
-"  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ '+(mi+1)+'試合目'});});}",
+"  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ'});});}",
 "  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE')q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:m.winner!=null,playing:!!(t.playing&&t.playing['br:'+m.key]),label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});});});}",
 "  var cnt={};q.forEach(function(x){if(x.playing&&!x.finished){cnt[x.a]=(cnt[x.a]||0)+1;cnt[x.b]=(cnt[x.b]||0)+1;}});",
 "  q.forEach(function(x){if(x.playing&&!x.finished&&(cnt[x.a]>1||cnt[x.b]>1))x.conflict=true;});",
@@ -232,7 +242,10 @@ const SHARED = [
 "  var playing=q.filter(function(x){return x.playing&&!x.finished;});",
 "  var rest=q.filter(function(x){return !x.playing&&!x.finished;});",
 "  var n=(typeof t.waitCount==='number')?t.waitCount:3;if(n<0)n=0;",
-"  return {playing:playing,waiting:rest.slice(0,n),upcoming:rest.slice(n),queue:q,conflicts:playing.filter(function(x){return x.conflict;})};",
+"  var busy={};playing.forEach(function(x){busy[x.a]=true;busy[x.b]=true;});",
+"  var waiting=[],upcoming=[];",
+"  rest.forEach(function(x){if(waiting.length<n&&!busy[x.a]&&!busy[x.b]){waiting.push(x);busy[x.a]=true;busy[x.b]=true;}else{upcoming.push(x);}});",
+"  return {playing:playing,waiting:waiting,upcoming:upcoming,queue:q,conflicts:playing.filter(function(x){return x.conflict;})};",
 "}"
 ].join('\n');
 
@@ -369,6 +382,7 @@ function render(){
   var cl=callLists(t,v);
   if(cl.playing.length>0||cl.waiting.length>0){
     html+='<div class="card callbox"><h2>📣 呼び出し</h2>';
+    html+='<div class="hint" style="margin-bottom:6px">コート数：'+((typeof t.courtCount==='number')?t.courtCount:4)+'面 ｜ 試合中 '+cl.playing.length+'試合</div>';
     function callRow(m,badge){
       return '<div style="margin:6px 0"><div class="ctx" style="font-size:12px;font-weight:bold;color:var(--dark)">'+badge+' '+esc(m.label)+'</div><div class="matchline'+(m.conflict?' conflict':'')+'"><span class="pairname">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div></div>';
     }
@@ -387,9 +401,8 @@ function render(){
       html+='</table><div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（リーグの全試合が終わると確定します）</div>';
       html+='<h3>対戦結果</h3>';
       if(lg.matches.length===0){html+='<div class="hint">対戦はまだありません</div>';}
-      lg.matches.forEach(function(m,mi){
+      lg.matches.forEach(function(m){
         var sc=(m.ga==null)?'－':('<span class="'+(m.winner===m.a?'wnum':'')+'">'+m.ga+'</span> - <span class="'+(m.winner===m.b?'wnum':'')+'">'+m.gb+'</span>');
-        html+='<div class="matchno">'+(mi+1)+'試合目</div>';
         html+='<div class="matchline"><span class="pairname'+(m.winner===m.a?' winname':'')+'">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">'+sc+'</span><span class="pairname'+(m.winner===m.b?' winname':'')+'" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div>';
       });
       html+='</div>';
@@ -517,7 +530,7 @@ function doLogout(){localStorage.removeItem('st_admin_token');token='';T=null;in
 function newTid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*100000).toString(36);}
 function blankTournament(name,format,pairCount,ppl,adv){
   var t={id:newTid(),name:name,format:format,pairCount:pairCount,pairsPerLeague:ppl,advanceCount:adv,
-    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},waitCount:3,playing:{}};
+    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},waitCount:3,courtCount:4,playing:{}};
   for(var i=1;i<=pairCount;i++)t.pairs.push({id:i,name:'',team:'',seed:false});
   if(format==='league_tournament'){var L=leagueCount(t);for(var j=0;j<L;j++)t.leagueAssignment.push([]);}
   else{var B=nextPow2(Math.max(2,pairCount));for(var k=0;k<B;k++)t.bracketSlots.push(null);}
@@ -699,7 +712,8 @@ function scoreEdit(prefix,key,a,b){
   save();
 }
 function stepWait(d){var el=document.getElementById('waitCount');var v=parseInt(el.value||'0',10)+d;if(v<0)v=0;if(v>20)v=20;el.value=v;}
-function callWaitSave(){var el=document.getElementById('waitCount');var v=parseInt(el.value,10);if(isNaN(v)||v<0)v=0;if(v>20)v=20;T.waitCount=v;save();}
+function stepCourt(d){var el=document.getElementById('courtCount');var v=parseInt(el.value||'0',10)+d;if(v<1)v=1;if(v>30)v=30;el.value=v;}
+function callWaitSave(){var el=document.getElementById('waitCount');var v=parseInt(el.value,10);if(isNaN(v)||v<0)v=0;if(v>20)v=20;T.waitCount=v;var ce=document.getElementById('courtCount');var cv=parseInt(ce.value,10);if(isNaN(cv)||cv<1)cv=1;if(cv>30)cv=30;T.courtCount=cv;save();}
 function playingToggle(key,on){if(!T.playing)T.playing={};if(on)T.playing[key]=true;else delete T.playing[key];save();}
 function callScoreEdit(kind,key,a,b){
   var p=(kind==='lg')?'clg':'cbr';
@@ -716,8 +730,9 @@ function callScoreEdit(kind,key,a,b){
 function callSection(v){
   var cl=callLists(T,v);
   var h='<div class="card"><h2>呼び出し</h2>';
-  h+='<label class="f">待機ゲーム数</label><span class="stepper"><button type="button" onclick="stepWait(-1)">−</button><input type="number" id="waitCount" value="'+(typeof T.waitCount==='number'?T.waitCount:3)+'" min="0" max="20"><button type="button" onclick="stepWait(1)">＋</button></span> <button class="sub" onclick="callWaitSave()">呼び出し設定を保存</button>';
-  h+='<div class="hint">待機ゲーム数のぶんだけ、次の試合が「待機（呼び出し中）」になります。試合がコートに入ったら「試合中」にチェックを入れてください。結果を入力すると、その試合のチェックは自動で外れます。トーナメントの試合は、対戦相手が確定した時点で呼び出しの対象になります。</div>';
+  h+='<label class="f">待機ゲーム数</label><span class="stepper"><button type="button" onclick="stepWait(-1)">−</button><input type="number" id="waitCount" value="'+(typeof T.waitCount==='number'?T.waitCount:3)+'" min="0" max="20"><button type="button" onclick="stepWait(1)">＋</button></span>';
+  h+='<label class="f">コート数</label><span class="stepper"><button type="button" onclick="stepCourt(-1)">−</button><input type="number" id="courtCount" value="'+(typeof T.courtCount==='number'?T.courtCount:4)+'" min="1" max="30"><button type="button" onclick="stepCourt(1)">＋</button></span> <button class="sub" onclick="callWaitSave()">呼び出し設定を保存</button>';
+  h+='<div class="hint">待機ゲーム数のぶんだけ、次の試合が「待機（呼び出し中）」になります。待機は、同じペアの試合が重ならず、各ペアの試合間隔が空きすぎない順番で選ばれます。試合がコートに入ったら「試合中」にチェックを入れてください。結果を入力すると、その試合のチェックは自動で外れます。トーナメントの試合は、対戦相手が確定した時点で呼び出しの対象になります。</div>';
   function row(m,checked,badge){
     var p=(m.type==='lg')?'clg':'cbr';var raw=m.key.slice(3);
     var inputs='<span class="scorein"><input type="number" id="'+p+'-'+raw+'-a" min="0" max="9" value="'+(m.ga==null?'':m.ga)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"> − <input type="number" id="'+p+'-'+raw+'-b" min="0" max="9" value="'+(m.gb==null?'':m.gb)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"></span>';
@@ -728,6 +743,8 @@ function callSection(v){
     var dups=Object.keys(cnt).filter(function(k){return cnt[k]>1;}).map(function(k){return pairName(T,+k);});
     h+='<div class="alertbox">⚠ 同じペアが複数の試合で「試合中」になっています：'+dups.map(esc).join('、')+'（赤い行を確認してください）</div>';
   }
+  var cc=(typeof T.courtCount==='number')?T.courtCount:4;
+  if(cl.playing.length>cc)h+='<div class="alertbox">⚠ 試合中がコート数（'+cc+'面）を超えています</div>';
   if(cl.playing.length>0){h+='<h3>試合中</h3>';cl.playing.forEach(function(m){h+=row(m,true,'');});}
   if(cl.waiting.length>0){h+='<h3>待機（呼び出し中）</h3>';cl.waiting.forEach(function(m,i){h+=row(m,false,'待機'+(i+1));});}
   if(cl.playing.length===0&&cl.waiting.length===0)h+='<div class="hint">いま呼び出し中の試合はありません</div>';
@@ -745,8 +762,7 @@ function leagueInputSection(v){
   v.leagues.forEach(function(lg,li){
     h+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ｜結果入力と順位</h2>';
     if(lg.matches.length===0){h+='<div class="hint">ペアを割り振ると対戦が表示されます</div>';}
-    lg.matches.forEach(function(m,mi){
-      h+='<div class="matchno">'+(mi+1)+'試合目</div>';
+    lg.matches.forEach(function(m){
       h+='<div class="matchline"><span class="pairname'+(m.winner===m.a?' winname':'')+'">'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'
         +scoreInputs('lg',m.key,m.a,m.b,m.ga,m.gb)
         +'<span class="pairname'+(m.winner===m.b?' winname':'')+'" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
