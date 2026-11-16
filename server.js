@@ -132,7 +132,26 @@ const SHARED = [
 "    for(var rank=0;rank<t.advanceCount;rank++){view.leagues.forEach(function(lg){var done=lg.matches.length>0&&lg.matches.every(function(m){return m.ga!=null&&m.gb!=null;});ordered.push(done&&lg.standings[rank]?lg.standings[rank].id:null);srcs.push(String.fromCharCode(65+lg.index)+'リーグ'+(rank+1)+'位');});}",
 "    view.qualifiers=ordered;",
 "    if(ordered.length===0){view.bracket={slots:[],rounds:[]};}",
-"    else{var B=nextPow2(Math.max(2,ordered.length));var pos=seedPositions(B);var slots=pos.map(function(si){return si<ordered.length?ordered[si]:'BYE';});var rounds=computeBracket(slots,t.bracketScores);annotateLabels(rounds,pos.map(function(si){return si<ordered.length?srcs[si]:null;}));view.bracket={slots:slots,rounds:rounds};}",
+"    else{var B=nextPow2(Math.max(2,ordered.length));var pos=seedPositions(B);var LC=view.leagues.length;",
+"      var occ=pos.map(function(si){return si<ordered.length?{id:ordered[si],src:srcs[si],league:si%LC,rank:Math.floor(si/LC)}:{id:'BYE',src:null,league:-1,rank:99};});",
+"      var bad=function(x,y){if(x.rank>90||y.rank>90)return 0;if(x.league===y.league)return 2;if(x.rank===y.rank)return 1;return 0;};",
+"      for(var pass=0;pass<12;pass++){var improved=false;",
+"        for(var i=0;i+1<occ.length;i+=2){var bi=bad(occ[i],occ[i+1]);if(bi===0)continue;",
+"          for(var j=0;j+1<occ.length&&bi>0;j+=2){if(j===i)continue;var bj=bad(occ[j],occ[j+1]);",
+"            for(var s1=0;s1<2&&bi>0;s1++){for(var s2=0;s2<2;s2++){var xi=(s1===0?i:i+1),xj=(s2===0?j:j+1);",
+"              if(occ[xi].rank>90||occ[xj].rank>90)continue;",
+"              if(occ[xi^1].rank>90||occ[xj^1].rank>90)continue;",
+"              var tmp=occ[xi];occ[xi]=occ[xj];occ[xj]=tmp;",
+"              var ni=bad(occ[i],occ[i+1]),nj=bad(occ[j],occ[j+1]);",
+"              if(ni+nj<bi+bj&&(ni!==2||bi===2)&&(nj!==2||bj===2)){bi=ni;improved=true;}",
+"              else{var tmp2=occ[xi];occ[xi]=occ[xj];occ[xj]=tmp2;}",
+"            }}",
+"          }",
+"        }",
+"        if(!improved)break;",
+"      }",
+"      var slots=occ.map(function(o){return o.id;});var slotSrc=occ.map(function(o){return o.src;});",
+"      var rounds=computeBracket(slots,t.bracketScores);annotateLabels(rounds,slotSrc);view.bracket={slots:slots,rounds:rounds};}",
 "  }else{",
 "    var slots=t.bracketSlots||[];",
 "    var roundsT=computeBracket(slots,t.bracketScores);annotateLabels(roundsT,null);",
@@ -202,8 +221,10 @@ const SHARED = [
 "function matchQueue(t,v){",
 "  var q=[];",
 "  var maxM=0;(v.leagues||[]).forEach(function(lg){if(lg.matches.length>maxM)maxM=lg.matches.length;});",
-"  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ '+(mi+1)+'試合目'});});}",
-"  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE')q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,finished:m.winner!=null,playing:!!(t.playing&&t.playing['br:'+m.key]),label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});});});}",
+"  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ '+(mi+1)+'試合目'});});}",
+"  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE')q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:m.winner!=null,playing:!!(t.playing&&t.playing['br:'+m.key]),label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});});});}",
+"  var cnt={};q.forEach(function(x){if(x.playing&&!x.finished){cnt[x.a]=(cnt[x.a]||0)+1;cnt[x.b]=(cnt[x.b]||0)+1;}});",
+"  q.forEach(function(x){if(x.playing&&!x.finished&&(cnt[x.a]>1||cnt[x.b]>1))x.conflict=true;});",
 "  return q;",
 "}",
 "function callLists(t,v){",
@@ -211,7 +232,7 @@ const SHARED = [
 "  var playing=q.filter(function(x){return x.playing&&!x.finished;});",
 "  var rest=q.filter(function(x){return !x.playing&&!x.finished;});",
 "  var n=(typeof t.waitCount==='number')?t.waitCount:3;if(n<0)n=0;",
-"  return {playing:playing,waiting:rest.slice(0,n),upcoming:rest.slice(n),queue:q};",
+"  return {playing:playing,waiting:rest.slice(0,n),upcoming:rest.slice(n),queue:q,conflicts:playing.filter(function(x){return x.conflict;})};",
 "}"
 ].join('\n');
 
@@ -276,6 +297,8 @@ label.f{display:block;margin:10px 0 4px;font-size:13px;color:var(--dark);font-we
 .printbar{text-align:right;margin:0 0 10px;}
 .callbox{border:2px solid var(--green);background:#fbfefc;}
 .ctx{display:block;font-size:11px;color:var(--gray);}
+.matchline.conflict{background:#fdecea;border:1px solid #e57373;border-radius:6px;}
+.alertbox{background:#fdecea;border:1px solid #e57373;color:#b3261e;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:bold;margin:8px 0;}
 .tswitch{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 .tswitch a{padding:6px 12px;border:1px solid var(--dark);border-radius:999px;color:var(--dark);text-decoration:none;font-size:13px;}
 .tswitch a.cur{background:var(--dark);color:#fff;}
@@ -347,10 +370,11 @@ function render(){
   if(cl.playing.length>0||cl.waiting.length>0){
     html+='<div class="card callbox"><h2>📣 呼び出し</h2>';
     function callRow(m,badge){
-      return '<div style="margin:6px 0"><div class="ctx" style="font-size:12px;font-weight:bold;color:var(--dark)">'+badge+' '+esc(m.label)+'</div><div class="matchline"><span class="pairname">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div></div>';
+      return '<div style="margin:6px 0"><div class="ctx" style="font-size:12px;font-weight:bold;color:var(--dark)">'+badge+' '+esc(m.label)+'</div><div class="matchline'+(m.conflict?' conflict':'')+'"><span class="pairname">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div></div>';
     }
     if(cl.playing.length>0){html+='<h3>試合中</h3>';cl.playing.forEach(function(m){html+=callRow(m,'🟢');});}
     if(cl.waiting.length>0){html+='<h3>待機（呼び出し中）</h3>';cl.waiting.forEach(function(m,i){html+=callRow(m,'待機'+(i+1));});}
+    if(cl.conflicts&&cl.conflicts.length>0){html+='<div class="alertbox">同じペアが複数の試合に入っています。大会本部にご確認ください。</div>';}
     html+='<div class="hint">待機の試合は、待機順に空いたコートへ入ります。</div></div>';
   }
   if(t.format==='league_tournament'){
@@ -677,13 +701,32 @@ function scoreEdit(prefix,key,a,b){
 function stepWait(d){var el=document.getElementById('waitCount');var v=parseInt(el.value||'0',10)+d;if(v<0)v=0;if(v>20)v=20;el.value=v;}
 function callWaitSave(){var el=document.getElementById('waitCount');var v=parseInt(el.value,10);if(isNaN(v)||v<0)v=0;if(v>20)v=20;T.waitCount=v;save();}
 function playingToggle(key,on){if(!T.playing)T.playing={};if(on)T.playing[key]=true;else delete T.playing[key];save();}
+function callScoreEdit(kind,key,a,b){
+  var p=(kind==='lg')?'clg':'cbr';
+  var ea=document.getElementById(p+'-'+key+'-a'),eb=document.getElementById(p+'-'+key+'-b');
+  var va=ea.value===''?null:parseInt(ea.value,10),vb=eb.value===''?null:parseInt(eb.value,10);
+  var store=(kind==='lg')?T.leagueScores:T.bracketScores;
+  if(va===null&&vb===null){delete store[key];save();return;}
+  if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
+  if(va===vb){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);return;}
+  store[key]={a:a,b:b,ga:va,gb:vb};
+  if(T.playing)delete T.playing[kind+':'+key];
+  save();
+}
 function callSection(v){
   var cl=callLists(T,v);
   var h='<div class="card"><h2>呼び出し</h2>';
   h+='<label class="f">待機ゲーム数</label><span class="stepper"><button type="button" onclick="stepWait(-1)">−</button><input type="number" id="waitCount" value="'+(typeof T.waitCount==='number'?T.waitCount:3)+'" min="0" max="20"><button type="button" onclick="stepWait(1)">＋</button></span> <button class="sub" onclick="callWaitSave()">呼び出し設定を保存</button>';
   h+='<div class="hint">待機ゲーム数のぶんだけ、次の試合が「待機（呼び出し中）」になります。試合がコートに入ったら「試合中」にチェックを入れてください。結果を入力すると、その試合のチェックは自動で外れます。トーナメントの試合は、対戦相手が確定した時点で呼び出しの対象になります。</div>';
   function row(m,checked,badge){
-    return '<div class="matchline"><label style="flex:none"><input type="checkbox" '+(checked?'checked':'')+' onchange="playingToggle(\\''+m.key+'\\',this.checked)"> 試合中</label><span class="pairname"><span class="ctx">'+(badge?badge+'｜':'')+esc(m.label)+'</span>'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
+    var p=(m.type==='lg')?'clg':'cbr';var raw=m.key.slice(3);
+    var inputs='<span class="scorein"><input type="number" id="'+p+'-'+raw+'-a" min="0" max="9" value="'+(m.ga==null?'':m.ga)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"> − <input type="number" id="'+p+'-'+raw+'-b" min="0" max="9" value="'+(m.gb==null?'':m.gb)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"></span>';
+    return '<div class="matchline'+(m.conflict?' conflict':'')+'"><label style="flex:none"><input type="checkbox" '+(checked?'checked':'')+' onchange="playingToggle(\\''+m.key+'\\',this.checked)"> 試合中</label><span class="pairname"><span class="ctx">'+(badge?badge+'｜':'')+esc(m.label)+'</span>'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'+inputs+'<span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
+  }
+  if(cl.conflicts&&cl.conflicts.length>0){
+    var cnt={};cl.playing.forEach(function(m){cnt[m.a]=(cnt[m.a]||0)+1;cnt[m.b]=(cnt[m.b]||0)+1;});
+    var dups=Object.keys(cnt).filter(function(k){return cnt[k]>1;}).map(function(k){return pairName(T,+k);});
+    h+='<div class="alertbox">⚠ 同じペアが複数の試合で「試合中」になっています：'+dups.map(esc).join('、')+'（赤い行を確認してください）</div>';
   }
   if(cl.playing.length>0){h+='<h3>試合中</h3>';cl.playing.forEach(function(m){h+=row(m,true,'');});}
   if(cl.waiting.length>0){h+='<h3>待機（呼び出し中）</h3>';cl.waiting.forEach(function(m,i){h+=row(m,false,'待機'+(i+1));});}
