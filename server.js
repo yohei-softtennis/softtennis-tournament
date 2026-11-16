@@ -76,7 +76,7 @@ const SHARED = [
 "function seedPositions(size){var arr=[0,1];while(arr.length<size){var n=arr.length*2;var next=[];for(var i=0;i<arr.length;i++){next.push(arr[i]);next.push(n-1-arr[i]);}arr=next;}return arr;}",
 "function pairById(t,id){for(var i=0;i<t.pairs.length;i++){if(t.pairs[i].id===id)return t.pairs[i];}return null;}",
 "function registeredPairs(t){return t.pairs.filter(function(p){return p.name&&p.name.trim()!=='';});}",
-"function leagueCount(t){return Math.max(1,Math.ceil(t.pairCount/Math.max(1,t.pairsPerLeague)));}",
+"function leagueCount(t){var N=t.pairCount;var L=Math.max(1,Math.ceil(N/Math.max(1,t.pairsPerLeague)));if(N>5){while(L>1&&Math.floor(N/L)<3)L--;}return L;}",
 "function leagueMatchList(ids){var ms=[];for(var i=0;i<ids.length;i++){for(var j=i+1;j<ids.length;j++){ms.push({a:ids[i],b:ids[j],key:ids[i]+'|'+ids[j]});}}return ms;}",
 "function computeStandings(t,ids){",
 "  var rows={};ids.forEach(function(id){rows[id]={id:id,w:0,l:0,gf:0,ga:0,diff:0};});",
@@ -112,7 +112,7 @@ const SHARED = [
 "  if(!t)return null;",
 "  var view={leagues:[],bracket:null,qualifiers:[]};",
 "  if(t.format==='league_tournament'){",
-"    var L=leagueCount(t);",
+"    var L=Math.max(leagueCount(t),(t.leagueAssignment||[]).length);",
 "    for(var li=0;li<L;li++){",
 "      var ids=(t.leagueAssignment&&t.leagueAssignment[li])||[];",
 "      var st=computeStandings(t,ids);",
@@ -205,7 +205,7 @@ const CSS = `
 *{box-sizing:border-box;}
 body{margin:0;font-family:-apple-system,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;background:#f4faf6;color:#17301f;}
 header{background:var(--dark);color:#fff;padding:14px 16px;}
-header h1{margin:0;font-size:20px;}
+header h1{margin:0;font-size:27px;font-weight:800;letter-spacing:.02em;}
 header .sub{font-size:12px;opacity:.85;margin-top:2px;}
 main{max-width:980px;margin:0 auto;padding:14px 12px 40px;}
 .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
@@ -223,7 +223,11 @@ tr.qualify td{background:#f2fbf5;}
 .pairname .team{display:block;font-size:11px;color:var(--gray);}
 .score{font-weight:bold;font-size:15px;min-width:44px;text-align:center;}
 .winner{color:var(--green);font-weight:bold;}
-.winner .pairname,.winname{color:var(--green);font-weight:bold;}
+.winner .pairname,.winname{color:#0a7d2c;font-weight:800;}
+.matchno{font-size:12px;font-weight:bold;color:var(--dark);margin-top:8px;}
+.score .wnum{background:#1d9e4b;color:#fff;border-radius:50%;width:23px;height:23px;line-height:23px;display:inline-block;text-align:center;font-weight:800;}
+.bmatch .row.win{background:#e6f6ec;border-radius:5px;}
+.bmatch .row .sc.win{background:#1d9e4b;color:#fff;border-radius:50%;width:23px;height:23px;line-height:23px;text-align:center;font-weight:800;flex:none;}
 .bracket{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;}
 .round{flex:1;min-width:180px;}
 .round h4{margin:0 0 8px;font-size:13px;color:#fff;background:var(--green);border-radius:6px;padding:4px 8px;text-align:center;}
@@ -322,8 +326,9 @@ function render(){
       html+='</table><div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（リーグの全試合が終わると確定します）</div>';
       html+='<h3>対戦結果</h3>';
       if(lg.matches.length===0){html+='<div class="hint">対戦はまだありません</div>';}
-      lg.matches.forEach(function(m){
-        var sc=(m.ga==null)?'－':(m.ga+' - '+m.gb);
+      lg.matches.forEach(function(m,mi){
+        var sc=(m.ga==null)?'－':('<span class="'+(m.winner===m.a?'wnum':'')+'">'+m.ga+'</span> - <span class="'+(m.winner===m.b?'wnum':'')+'">'+m.gb+'</span>');
+        html+='<div class="matchno">'+(mi+1)+'試合目</div>';
         html+='<div class="matchline"><span class="pairname'+(m.winner===m.a?' winname':'')+'">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">'+sc+'</span><span class="pairname'+(m.winner===m.b?' winname':'')+'" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div>';
       });
       html+='</div>';
@@ -356,7 +361,7 @@ function bmatchHtml(t,m){
   function row(v,sc,isWin){
     if(v==='BYE')return '<div class="row bye"><span>不戦勝（BYE）</span><span class="sc"></span></div>';
     if(v==null)return '<div class="row bye"><span>未定</span><span class="sc"></span></div>';
-    return '<div class="row"><span class="'+(isWin?'winname':'')+'">'+pairName(t,v)+(pairTeam(t,v)?' <small>（'+pairTeam(t,v)+'）</small>':'')+'</span><span class="sc">'+(sc==null?'':sc)+'</span></div>';
+    return '<div class="row'+(isWin?' win':'')+'"><span class="'+(isWin?'winname':'')+'">'+pairName(t,v)+(pairTeam(t,v)?' <small>（'+pairTeam(t,v)+'）</small>':'')+'</span><span class="sc'+(isWin?' win':'')+'">'+(sc==null?'':sc)+'</span></div>';
   }
   return '<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null)+row(m.b,m.gb,m.winner===m.b&&m.b!=null)+'</div>';
 }
@@ -636,10 +641,11 @@ function leagueInputSection(v){
   v.leagues.forEach(function(lg,li){
     h+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ｜結果入力と順位</h2>';
     if(lg.matches.length===0){h+='<div class="hint">ペアを割り振ると対戦が表示されます</div>';}
-    lg.matches.forEach(function(m){
-      h+='<div class="matchline"><span class="pairname">'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'
+    lg.matches.forEach(function(m,mi){
+      h+='<div class="matchno">'+(mi+1)+'試合目</div>';
+      h+='<div class="matchline"><span class="pairname'+(m.winner===m.a?' winname':'')+'">'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'
         +scoreInputs('lg',m.key,m.a,m.b,m.ga,m.gb)
-        +'<span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
+        +'<span class="pairname'+(m.winner===m.b?' winname':'')+'" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
     });
     h+='<h3>順位表</h3><table><tr><th>順位</th><th class="name">ペア</th><th>勝</th><th>負</th><th>得</th><th>失</th><th>差</th></tr>';
     lg.standings.forEach(function(r,idx){
@@ -670,7 +676,7 @@ function bmatchAdminHtml(m){
   function row(v,sc,isWin){
     if(v==='BYE')return '<div class="row bye"><span>不戦勝（BYE）</span><span class="sc"></span></div>';
     if(v==null)return '<div class="row bye"><span>未定</span><span class="sc"></span></div>';
-    return '<div class="row"><span class="'+(isWin?'winname':'')+'">'+pairName(T,v)+'</span><span class="sc">'+(sc==null?'':sc)+'</span></div>';
+    return '<div class="row'+(isWin?' win':'')+'"><span class="'+(isWin?'winname':'')+'">'+pairName(T,v)+'</span><span class="sc'+(isWin?' win':'')+'">'+(sc==null?'':sc)+'</span></div>';
   }
   var h='<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null)+row(m.b,m.gb,m.winner===m.b&&m.b!=null);
   if(typeof m.a==='number'&&typeof m.b==='number'){
@@ -719,7 +725,7 @@ function renderApp(){
     h+=tournamentForm(true);
     app.innerHTML=h;toggleLeagueFields();return;
   }
-  h+='<div class="card"><h2>'+esc(T.name)+'</h2><div class="hint">'+(T.format==='league_tournament'?'リーグ戦 → トーナメント':'トーナメントのみ')+' ／ '+T.pairCount+'ペア</div></div>';
+  h+='<div class="card"><h2 style="font-size:22px">'+esc(T.name)+'</h2><div class="hint">'+(T.format==='league_tournament'?'リーグ戦 → トーナメント':'トーナメントのみ')+' ／ '+T.pairCount+'ペア</div></div>';
   h+=tournamentForm(false);
   h+=pairsForm();
   h+=assignSection();
