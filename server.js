@@ -11,7 +11,9 @@ const path = require('path');
 const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
-const DATA_FILE = path.join(__dirname, 'data.json');
+// 永続ボリュームがある環境（Railway等）ではそちらに保存し、再起動・再デプロイでもデータを残す。
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.DATA_DIR || __dirname;
+const DATA_FILE = path.join(DATA_DIR, 'data.json');
 
 /* ---------------- データ保存 ---------------- */
 function initialData() { return { passwordHash: null, tournament: null }; }
@@ -25,6 +27,7 @@ function loadData() {
   } catch (e) { return initialData(); }
 }
 function saveData() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 let data = loadData();
