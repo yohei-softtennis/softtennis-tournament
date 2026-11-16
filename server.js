@@ -198,7 +198,21 @@ const SHARED = [
 "  }",
 "}",
 "function slotLabel(t,v){if(v==='BYE')return '不戦勝（BYE）';if(v==null)return '未定';var p=pairById(t,v);return p?(p.name||'（未入力）'):'未定';}",
-"function slotTeam(t,v){if(typeof v==='number'){var p=pairById(t,v);return (p&&p.team)?p.team:'';}return '';}"
+"function slotTeam(t,v){if(typeof v==='number'){var p=pairById(t,v);return (p&&p.team)?p.team:'';}return '';}",
+"function matchQueue(t,v){",
+"  var q=[];",
+"  var maxM=0;(v.leagues||[]).forEach(function(lg){if(lg.matches.length>maxM)maxM=lg.matches.length;});",
+"  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ '+(mi+1)+'試合目'});});}",
+"  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE')q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,finished:m.winner!=null,playing:!!(t.playing&&t.playing['br:'+m.key]),label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});});});}",
+"  return q;",
+"}",
+"function callLists(t,v){",
+"  var q=matchQueue(t,v);",
+"  var playing=q.filter(function(x){return x.playing&&!x.finished;});",
+"  var rest=q.filter(function(x){return !x.playing&&!x.finished;});",
+"  var n=(typeof t.waitCount==='number')?t.waitCount:3;if(n<0)n=0;",
+"  return {playing:playing,waiting:rest.slice(0,n),upcoming:rest.slice(n),queue:q};",
+"}"
 ].join('\n');
 
 const shared = new Function(
@@ -206,6 +220,7 @@ const shared = new Function(
   'registeredPairs:registeredPairs,leagueCount:leagueCount,leagueMatchList:leagueMatchList,' +
   'computeStandings:computeStandings,computeBracket:computeBracket,roundName:roundName,' +
   'buildView:buildView,assignLeagues:assignLeagues,assignBracket:assignBracket,' +
+  'matchQueue:matchQueue,callLists:callLists,' +
   'pruneScores:pruneScores,slotLabel:slotLabel,slotTeam:slotTeam};'
 )();
 
@@ -259,6 +274,8 @@ label.f{display:block;margin:10px 0 4px;font-size:13px;color:var(--dark);font-we
 .adminlink{text-align:center;padding:20px 0 28px;font-size:13px;}
 .adminlink a{color:var(--dark);}
 .printbar{text-align:right;margin:0 0 10px;}
+.callbox{border:2px solid var(--green);background:#fbfefc;}
+.ctx{display:block;font-size:11px;color:var(--gray);}
 .tswitch{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
 .tswitch a{padding:6px 12px;border:1px solid var(--dark);border-radius:999px;color:var(--dark);text-decoration:none;font-size:13px;}
 .tswitch a.cur{background:var(--dark);color:#fff;}
@@ -326,6 +343,16 @@ function render(){
     html+='<div class="card tswitch"><strong>大会：</strong>'+state.list.map(function(x){return '<a href="?id='+encodeURIComponent(x.id)+'"'+(t.id===x.id?' class="cur"':'')+'>'+esc(x.name||'（無題）')+'</a>';}).join('')+'</div>';
   }
   html+='<div class="printbar"><button onclick="window.print()">📄 結果をPDFで保存（印刷）</button></div>';
+  var cl=callLists(t,v);
+  if(cl.playing.length>0||cl.waiting.length>0){
+    html+='<div class="card callbox"><h2>📣 呼び出し</h2>';
+    function callRow(m,badge){
+      return '<div style="margin:6px 0"><div class="ctx" style="font-size:12px;font-weight:bold;color:var(--dark)">'+badge+' '+esc(m.label)+'</div><div class="matchline"><span class="pairname">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div></div>';
+    }
+    if(cl.playing.length>0){html+='<h3>試合中</h3>';cl.playing.forEach(function(m){html+=callRow(m,'🟢');});}
+    if(cl.waiting.length>0){html+='<h3>待機（呼び出し中）</h3>';cl.waiting.forEach(function(m,i){html+=callRow(m,'待機'+(i+1));});}
+    html+='<div class="hint">待機の試合は、待機順に空いたコートへ入ります。</div></div>';
+  }
   if(t.format==='league_tournament'){
     v.leagues.forEach(function(lg,li){
       html+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ</h2>';
@@ -466,7 +493,7 @@ function doLogout(){localStorage.removeItem('st_admin_token');token='';T=null;in
 function newTid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*100000).toString(36);}
 function blankTournament(name,format,pairCount,ppl,adv){
   var t={id:newTid(),name:name,format:format,pairCount:pairCount,pairsPerLeague:ppl,advanceCount:adv,
-    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{}};
+    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},waitCount:3,playing:{}};
   for(var i=1;i<=pairCount;i++)t.pairs.push({id:i,name:'',team:'',seed:false});
   if(format==='league_tournament'){var L=leagueCount(t);for(var j=0;j<L;j++)t.leagueAssignment.push([]);}
   else{var B=nextPow2(Math.max(2,pairCount));for(var k=0;k<B;k++)t.bracketSlots.push(null);}
@@ -644,7 +671,31 @@ function scoreEdit(prefix,key,a,b){
   if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
   if(va===vb){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);return;}
   store[key]={a:a,b:b,ga:va,gb:vb};
+  if(T.playing)delete T.playing[prefix+':'+key];
   save();
+}
+function stepWait(d){var el=document.getElementById('waitCount');var v=parseInt(el.value||'0',10)+d;if(v<0)v=0;if(v>20)v=20;el.value=v;}
+function callWaitSave(){var el=document.getElementById('waitCount');var v=parseInt(el.value,10);if(isNaN(v)||v<0)v=0;if(v>20)v=20;T.waitCount=v;save();}
+function playingToggle(key,on){if(!T.playing)T.playing={};if(on)T.playing[key]=true;else delete T.playing[key];save();}
+function callSection(v){
+  var cl=callLists(T,v);
+  var h='<div class="card"><h2>呼び出し</h2>';
+  h+='<label class="f">待機ゲーム数</label><span class="stepper"><button type="button" onclick="stepWait(-1)">−</button><input type="number" id="waitCount" value="'+(typeof T.waitCount==='number'?T.waitCount:3)+'" min="0" max="20"><button type="button" onclick="stepWait(1)">＋</button></span> <button class="sub" onclick="callWaitSave()">呼び出し設定を保存</button>';
+  h+='<div class="hint">待機ゲーム数のぶんだけ、次の試合が「待機（呼び出し中）」になります。試合がコートに入ったら「試合中」にチェックを入れてください。結果を入力すると、その試合のチェックは自動で外れます。トーナメントの試合は、対戦相手が確定した時点で呼び出しの対象になります。</div>';
+  function row(m,checked,badge){
+    return '<div class="matchline"><label style="flex:none"><input type="checkbox" '+(checked?'checked':'')+' onchange="playingToggle(\\''+m.key+'\\',this.checked)"> 試合中</label><span class="pairname"><span class="ctx">'+(badge?badge+'｜':'')+esc(m.label)+'</span>'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
+  }
+  if(cl.playing.length>0){h+='<h3>試合中</h3>';cl.playing.forEach(function(m){h+=row(m,true,'');});}
+  if(cl.waiting.length>0){h+='<h3>待機（呼び出し中）</h3>';cl.waiting.forEach(function(m,i){h+=row(m,false,'待機'+(i+1));});}
+  if(cl.playing.length===0&&cl.waiting.length===0)h+='<div class="hint">いま呼び出し中の試合はありません</div>';
+  if(cl.upcoming.length>0){
+    h+='<h3>このあとの試合（予定順）</h3>';
+    cl.upcoming.slice(0,10).forEach(function(m){
+      h+='<div class="matchline"><span class="pairname"><span class="ctx">'+esc(m.label)+'</span>'+pairName(T,m.a)+'</span><span class="score">vs</span><span class="pairname" style="text-align:right">'+pairName(T,m.b)+'</span></div>';
+    });
+  }
+  h+='</div>';
+  return h;
 }
 function leagueInputSection(v){
   var h='';
@@ -740,6 +791,7 @@ function renderApp(){
   h+=pairsForm();
   h+=assignSection();
   var v=buildView(T);
+  h+=callSection(v);
   if(T.format==='league_tournament')h+=leagueInputSection(v);
   h+=bracketSection(v);
   h+='<div class="card"><h2>その他の操作</h2>'
