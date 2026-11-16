@@ -1,0 +1,1 @@
+{"description":"ソフトテニス大会進行表（公開版）","engines":{"node":">=18"},"main":"server.js","name":"softtennis-public","private":true,"scripts":{"start":"node server.js"},"version":"1.0.0"}
