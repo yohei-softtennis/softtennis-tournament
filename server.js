@@ -16,13 +16,21 @@ const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.DATA_DIR |
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 
 /* ---------------- データ保存 ---------------- */
-function initialData() { return { passwordHash: null, tournament: null }; }
+function initialData() { return { passwordHash: null, tournaments: [] }; }
 function loadData() {
   try {
     const d = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     if (typeof d !== 'object' || d === null) return initialData();
     if (!('passwordHash' in d)) d.passwordHash = null;
-    if (!('tournament' in d)) d.tournament = null;
+    if (!Array.isArray(d.tournaments)) d.tournaments = [];
+    // 旧形式（単一大会）からの移行
+    if (d.tournament) {
+      const t = d.tournament;
+      if (!t.id) t.id = 'main';
+      if (!d.tournaments.some((x) => x && x.id === t.id)) d.tournaments.push(t);
+      delete d.tournament;
+    }
+    d.tournaments.forEach((t, i) => { if (t && !t.id) t.id = 't' + (i + 1); });
     return d;
   } catch (e) { return initialData(); }
 }
@@ -31,7 +39,7 @@ function saveData() {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 let data = loadData();
-if (!fs.existsSync(DATA_FILE)) saveData();
+saveData();
 
 /* ---------------- パスワード認証 ---------------- */
 const tokens = new Set(); // ログイン中トークン（メモリ保持。再起動したら再ログイン）
@@ -236,6 +244,17 @@ label.f{display:block;margin:10px 0 4px;font-size:13px;color:var(--dark);font-we
 .hint{font-size:12px;color:var(--gray);}
 .adminlink{text-align:center;padding:20px 0 28px;font-size:13px;}
 .adminlink a{color:var(--dark);}
+.printbar{text-align:right;margin:0 0 10px;}
+.tswitch{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.tswitch a{padding:6px 12px;border:1px solid var(--dark);border-radius:999px;color:var(--dark);text-decoration:none;font-size:13px;}
+.tswitch a.cur{background:var(--dark);color:#fff;}
+@media print{
+  .printbar,.adminlink,.tswitch{display:none !important;}
+  header{background:#fff;color:#000;border-bottom:2px solid #333;}
+  body{background:#fff;}
+  .card{box-shadow:none;border:1px solid #bbb;break-inside:avoid;}
+  .bracket{overflow:visible;flex-wrap:wrap;}
+}
 .err{color:#b3261e;font-size:13px;}
 .ok{color:var(--green);font-size:13px;}
 .chips{display:flex;flex-wrap:wrap;gap:6px;min-height:38px;padding:6px;border:1px dashed var(--border);border-radius:8px;background:#fbfefc;}
@@ -289,6 +308,10 @@ function render(){
   document.getElementById('subtitle').textContent=(t.format==='league_tournament'?'リーグ戦 → トーナメント':'トーナメント方式')+' ／ '+t.pairCount+'ペア ／ 最終更新 '+new Date().toLocaleTimeString('ja-JP');
   var v=state.view;
   var html='';
+  if(state.list&&state.list.length>1){
+    html+='<div class="card tswitch"><strong>大会：</strong>'+state.list.map(function(x){return '<a href="?id='+encodeURIComponent(x.id)+'"'+(t.id===x.id?' class="cur"':'')+'>'+esc(x.name||'（無題）')+'</a>';}).join('')+'</div>';
+  }
+  html+='<div class="printbar"><button onclick="window.print()">📄 結果をPDFで保存（印刷）</button></div>';
   if(t.format==='league_tournament'){
     v.leagues.forEach(function(lg,li){
       html+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ</h2>';
@@ -338,7 +361,8 @@ function bmatchHtml(t,m){
   return '<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null)+row(m.b,m.gb,m.winner===m.b&&m.b!=null)+'</div>';
 }
 function load(){
-  fetch('/api/state').then(function(r){return r.json();}).then(function(d){state=d;render();}).catch(function(){});
+  var tid=new URLSearchParams(location.search).get('id');
+  fetch('/api/state'+(tid?('?id='+encodeURIComponent(tid)):'')).then(function(r){return r.json();}).then(function(d){state=d;render();}).catch(function(){});
 }
 load();
 setInterval(load,30000);
@@ -365,6 +389,8 @@ const ADMIN_HTML = `<!DOCTYPE html>
 ${SHARED}
 var token=localStorage.getItem('st_admin_token')||'';
 var T=null;
+var TLIST=[];
+var DRAFT=false;
 var sel=null;
 var msg='';
 function api(path,opts){
@@ -380,13 +406,13 @@ function save(after){
   api('/api/admin/save',{method:'POST',body:{tournament:T}}).then(function(r){
     if(r.status===401){alert('ログインの有効期限が切れました。再度ログインしてください。');localStorage.removeItem('st_admin_token');token='';init();return;}
     return r.json();
-  }).then(function(d){if(d&&d.ok){showMsg('保存しました');if(after)after();renderApp();}}).catch(function(){showMsg('保存に失敗しました',true);});
+  }).then(function(d){if(d&&d.ok){showMsg('保存しました');if(T){var ix=TLIST.findIndex(function(x){return x.id===T.id;});if(ix>=0)TLIST[ix]=T;else TLIST.push(T);}if(after)after();renderApp();}}).catch(function(){showMsg('保存に失敗しました',true);});
 }
 function init(){
   api('/api/auth/status').then(function(r){return r.json();}).then(function(d){
     if(!d.hasPassword){renderSetup();return;}
     if(!d.authed){renderLogin();return;}
-    api('/api/state').then(function(r){return r.json();}).then(function(s){T=s.tournament;renderApp();});
+    api('/api/admin/state').then(function(r){return r.json();}).then(function(s){TLIST=s.tournaments||[];if(T){var ix=TLIST.findIndex(function(x){return x.id===T.id;});T=ix>=0?TLIST[ix]:null;}renderApp();});
   }).catch(function(){document.getElementById('app').innerHTML='<div class="card err">サーバーに接続できませんでした</div>';});
 }
 function renderSetup(){
@@ -422,8 +448,9 @@ function doLogin(){
 function doLogout(){localStorage.removeItem('st_admin_token');token='';T=null;init();}
 
 /* ---------- 大会の作成・設定 ---------- */
+function newTid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*100000).toString(36);}
 function blankTournament(name,format,pairCount,ppl,adv){
-  var t={name:name,format:format,pairCount:pairCount,pairsPerLeague:ppl,advanceCount:adv,
+  var t={id:newTid(),name:name,format:format,pairCount:pairCount,pairsPerLeague:ppl,advanceCount:adv,
     separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{}};
   for(var i=1;i<=pairCount;i++)t.pairs.push({id:i,name:'',team:'',seed:false});
   if(format==='league_tournament'){var L=leagueCount(t);for(var j=0;j<L;j++)t.leagueAssignment.push([]);}
@@ -460,7 +487,7 @@ function doCreate(){
   var f=readForm();
   if(!f.name){showMsg('大会名を入力してください',true);return;}
   T=blankTournament(f.name,f.format,f.pairCount,f.pairsPerLeague,f.advanceCount);
-  sel=null;save();
+  DRAFT=false;sel=null;save();
 }
 function doSettings(){
   var f=readForm();
@@ -468,6 +495,7 @@ function doSettings(){
   if(!confirm('設定を変更すると、割り振りと結果がリセットされます。よろしいですか？'))return;
   var old=T;
   var nt=blankTournament(f.name,f.format,f.pairCount,f.pairsPerLeague,f.advanceCount);
+  nt.id=old.id;
   nt.separateTeams=old.separateTeams;nt.separateSeeds=old.separateSeeds;
   for(var i=0;i<Math.min(old.pairs.length,nt.pairs.length);i++){nt.pairs[i].name=old.pairs[i].name;nt.pairs[i].team=old.pairs[i].team;nt.pairs[i].seed=old.pairs[i].seed;}
   T=nt;sel=null;save();
@@ -654,12 +682,40 @@ function bmatchAdminHtml(m){
   return h;
 }
 
+/* ---------- 大会一覧 ---------- */
+function renderList(){
+  var app=document.getElementById('app');
+  var h='<div id="msg">'+msg+'</div>';
+  h+='<p style="text-align:right"><button class="sub" onclick="doLogout()">ログアウト</button></p>';
+  h+='<div class="card"><h2>大会一覧</h2>';
+  if(TLIST.length===0){h+='<div class="hint">大会はまだありません</div>';}
+  TLIST.forEach(function(t){
+    h+='<div class="pairrow"><span style="flex:1">'+esc(t.name||'（無題）')+' <small>（'+(t.format==='league_tournament'?'リーグ戦 → トーナメント':'トーナメントのみ')+'／'+t.pairCount+'ペア）</small></span>'
+      +'<button onclick="openTournament(\\''+t.id+'\\')">編集する</button> '
+      +'<button class="danger" onclick="deleteTournamentById(\\''+t.id+'\\')">削除</button></div>';
+  });
+  h+='<p><button onclick="newTournament()">＋ 新しい大会を作成</button></p></div>';
+  app.innerHTML=h;
+}
+function openTournament(id){var t=TLIST.find(function(x){return x.id===id;});if(!t)return;T=t;DRAFT=false;sel=null;renderApp();}
+function newTournament(){DRAFT=true;T=null;sel=null;renderApp();}
+function backToList(){T=null;DRAFT=false;sel=null;renderApp();}
+function deleteTournamentById(id){
+  var t=TLIST.find(function(x){return x.id===id;});
+  if(!confirm('大会「'+(t?(t.name||'（無題）'):'')+'」を削除します。よろしいですか？'))return;
+  api('/api/admin/delete',{method:'POST',body:{id:id}}).then(function(r){return r.json();}).then(function(d){
+    if(d&&d.ok){TLIST=TLIST.filter(function(x){return x.id!==id;});if(T&&T.id===id)T=null;showMsg('削除しました');renderApp();}
+    else{showMsg('削除に失敗しました',true);}
+  }).catch(function(){showMsg('削除に失敗しました',true);});
+}
+
 /* ---------- 画面全体 ---------- */
 function renderApp(){
   var app=document.getElementById('app');
   var h='<div id="msg">'+msg+'</div>';
-  h+='<p style="text-align:right"><button class="sub" onclick="doLogout()">ログアウト</button></p>';
+  h+='<p style="text-align:right">'+(TLIST.length>0?'<button class="sub" onclick="backToList()">← 大会一覧に戻る</button>　':'')+'<button class="sub" onclick="doLogout()">ログアウト</button></p>';
   if(!T){
+    if(!DRAFT&&TLIST.length>0){renderList();return;}
     h+=tournamentForm(true);
     app.innerHTML=h;toggleLeagueFields();return;
   }
@@ -681,8 +737,8 @@ function clearScores(){
   T.leagueScores={};T.bracketScores={};save();
 }
 function deleteTournament(){
-  if(!confirm('大会を削除します。よろしいですか？'))return;
-  T=null;sel=null;save();
+  if(!T)return;
+  deleteTournamentById(T.id);
 }
 init();
 </script>
@@ -717,6 +773,7 @@ function validateTournament(t) {
   if (t.format !== 'tournament' && t.format !== 'league_tournament') return false;
   if (!Array.isArray(t.pairs) || !Array.isArray(t.leagueAssignment) || !Array.isArray(t.bracketSlots)) return false;
   if (typeof t.leagueScores !== 'object' || typeof t.bracketScores !== 'object') return false;
+  if (t.id !== undefined && typeof t.id !== 'string') return false;
   return true;
 }
 
@@ -728,11 +785,20 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/admin') return sendHtml(res, ADMIN_HTML);
 
     if (req.method === 'GET' && p === '/api/state') {
+      const list = data.tournaments.map((t) => ({ id: t.id, name: t.name, format: t.format, pairCount: t.pairCount }));
+      const want = url.searchParams.get('id');
+      let selT = want ? data.tournaments.find((t) => t.id === want) : null;
+      if (!selT) selT = data.tournaments[data.tournaments.length - 1] || null;
       return sendJson(res, 200, {
         hasPassword: !!data.passwordHash,
-        tournament: data.tournament,
-        view: data.tournament ? shared.buildView(data.tournament) : null,
+        list,
+        tournament: selT,
+        view: selT ? shared.buildView(selT) : null,
       });
+    }
+    if (req.method === 'GET' && p === '/api/admin/state') {
+      if (!isAuthed(req)) return sendJson(res, 401, { error: '認証が必要です' });
+      return sendJson(res, 200, { tournaments: data.tournaments });
     }
     if (req.method === 'GET' && p === '/api/auth/status') {
       return sendJson(res, 200, { hasPassword: !!data.passwordHash, authed: isAuthed(req) });
@@ -760,13 +826,23 @@ const server = http.createServer(async (req, res) => {
       if (!validateTournament(body.tournament)) {
         return sendJson(res, 400, { error: 'データ形式が正しくありません' });
       }
-      data.tournament = body.tournament;
+      const t = body.tournament;
+      if (!t.id) t.id = 'main';
+      const ix = data.tournaments.findIndex((x) => x.id === t.id);
+      if (ix >= 0) data.tournaments[ix] = t; else data.tournaments.push(t);
+      saveData();
+      return sendJson(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && p === '/api/admin/delete') {
+      if (!isAuthed(req)) return sendJson(res, 401, { error: '認証が必要です' });
+      const body = await readBody(req);
+      data.tournaments = data.tournaments.filter((x) => x.id !== body.id);
       saveData();
       return sendJson(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/admin/reset') {
       if (!isAuthed(req)) return sendJson(res, 401, { error: '認証が必要です' });
-      data.tournament = null;
+      data.tournaments = [];
       saveData();
       return sendJson(res, 200, { ok: true });
     }
