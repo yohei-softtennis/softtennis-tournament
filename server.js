@@ -88,7 +88,7 @@ const SHARED = [
 "  }",
 "  return ms;",
 "}",
-"function computeStandings(t,ids){",
+"function computeStandings(t,ids,li){",
 "  var rows={};ids.forEach(function(id){rows[id]={id:id,w:0,l:0,gf:0,ga:0,diff:0};});",
 "  var ms=leagueMatchList(ids);",
 "  ms.forEach(function(m){var sc=t.leagueScores[m.key];if(!sc)return;",
@@ -98,6 +98,11 @@ const SHARED = [
 "  arr.forEach(function(r){r.diff=r.gf-r.ga;});",
 "  function h2h(x,y){for(var k=0;k<ms.length;k++){var m=ms[k];if((m.a===x.id&&m.b===y.id)||(m.a===y.id&&m.b===x.id)){var sc=t.leagueScores[m.key];if(!sc)return 0;var xg=(m.a===x.id)?sc.ga:sc.gb;var yg=(m.a===x.id)?sc.gb:sc.ga;if(xg>yg)return -1;if(yg>xg)return 1;return 0;}}return 0;}",
 "  arr.sort(function(x,y){if(y.w!==x.w)return y.w-x.w;if(y.diff!==x.diff)return y.diff-x.diff;if(y.gf!==x.gf)return y.gf-x.gf;return h2h(x,y);});",
+"  if(li!=null&&t.rankOverride&&t.rankOverride[li]){",
+"    var ov=t.rankOverride[li];var pos={};ov.forEach(function(pid,ix){pos[pid]=ix;});",
+"    var base={};arr.forEach(function(r,ix){base[r.id]=ix;});",
+"    arr.sort(function(x,y){var px=(pos[x.id]!=null)?pos[x.id]:1000+base[x.id];var py=(pos[y.id]!=null)?pos[y.id]:1000+base[y.id];return px-py;});",
+"  }",
 "  return arr;}",
 "function computeBracket(slots,scores){",
 "  var rounds=[];var current=slots.slice();var r=0;",
@@ -134,7 +139,7 @@ const SHARED = [
 "    var L=Math.max(leagueCount(t),(t.leagueAssignment||[]).length);",
 "    for(var li=0;li<L;li++){",
 "      var ids=(t.leagueAssignment&&t.leagueAssignment[li])||[];",
-"      var st=computeStandings(t,ids);",
+"      var st=computeStandings(t,ids,li);",
 "      var ms=leagueMatchList(ids).map(function(m){var sc=t.leagueScores[m.key];return {a:m.a,b:m.b,key:m.key,ga:sc?sc.ga:null,gb:sc?sc.gb:null,winner:sc?(sc.ga>sc.gb?m.a:(sc.gb>sc.ga?m.b:null)):null};});",
 "      view.leagues.push({index:li,pairIds:ids,standings:st,matches:ms});",
 "    }",
@@ -433,11 +438,8 @@ function render(){
       html+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ</h2>';
       html+=leagueMatrixHtml(t,lg);
       html+='<div class="hint">セルの数字は、その行のペアの獲得ゲーム数です（丸囲みは勝ち）</div>';
-      html+='<h3>順位表</h3><table><tr><th>順位</th><th class="name">ペア</th><th>勝</th><th>負</th><th>得</th><th>失</th><th>差</th></tr>';
-      lg.standings.forEach(function(r,idx){
-        html+='<tr class="'+(idx<t.advanceCount?'qualify':'')+(idx===0?' rank1':'')+'"><td>'+(idx+1)+'</td><td class="name">'+pairName(t,r.id)+(pairTeam(t,r.id)?' <small>（'+pairTeam(t,r.id)+'）</small>':'')+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td><td>'+(r.diff>0?'+':'')+r.diff+'</td></tr>';
-      });
-      html+='</table><div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（リーグの全試合が終わると確定します）</div>';
+      html+='<div class="hint">順位は勝数・得失差・総得点・直接対決の順で自動計算されます。同点の場合は運営が順位を調整することがあります</div>';
+      html+='<div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（リーグの全試合が終わると確定します）</div>';
       html+='</div>';
     });
   }
@@ -465,11 +467,11 @@ function render(){
 function leagueMatrixHtml(t,lg){
   var ids=lg.pairIds||[];
   var byKey={};lg.matches.forEach(function(m){byKey[m.key]=m;});
-  var stById={};lg.standings.forEach(function(r,idx){stById[r.id]={w:r.w,l:r.l,rank:idx+1};});
+  var stById={};lg.standings.forEach(function(r,idx){stById[r.id]={w:r.w,l:r.l,diff:r.diff,rank:idx+1};});
   var ord={};lg.matches.forEach(function(m,i){ord[m.key]=i+1;});
   var h='<div class="mtxwrap"><table class="mtx"><tr><th class="name diag"></th>';
   ids.forEach(function(id,i){h+='<th>'+(i+1)+'</th>';});
-  h+='<th>勝敗</th><th>順位</th></tr>';
+  h+='<th>勝敗</th><th>差</th><th>順位</th></tr>';
   ids.forEach(function(rid,i){
     var st=stById[rid]||{w:0,l:0,rank:''};
     h+='<tr><td class="name">'+(i+1)+' '+pairName(t,rid)+(pairTeam(t,rid)?' <small>（'+pairTeam(t,rid)+'）</small>':'')+'</td>';
@@ -481,7 +483,7 @@ function leagueMatrixHtml(t,lg){
       if(i<j&&m){cell='<span class="ord">'+circledNum(ord[key])+'</span>'+cell;}
       h+='<td>'+cell+'</td>';
     });
-    h+='<td class="wl">'+st.w+' - '+st.l+'</td><td class="'+(st.rank&&st.rank<=t.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
+    h+='<td class="wl">'+st.w+' - '+st.l+'</td><td>'+(st.diff>0?'+':'')+(st.diff||0)+'</td><td class="'+(st.rank&&st.rank<=t.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
   });
   h+='</table></div>';
   return h;
@@ -620,7 +622,7 @@ function doLogout(){localStorage.removeItem('st_admin_token');token='';T=null;in
 function newTid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*100000).toString(36);}
 function blankTournament(name,format,pairCount,ppl,adv){
   var t={id:newTid(),name:name,format:format,pairCount:pairCount,pairsPerLeague:ppl,advanceCount:adv,
-    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},thirdPlace:false,thirdScore:null,waitCount:3,courtCount:4,playing:{}};
+    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},rankOverride:{},thirdPlace:false,thirdScore:null,waitCount:3,courtCount:4,playing:{}};
   for(var i=1;i<=pairCount;i++)t.pairs.push({id:i,name:'',team:'',seed:false});
   if(format==='league_tournament'){var L=leagueCount(t);for(var j=0;j<L;j++)t.leagueAssignment.push([]);}
   else{var B=nextPow2(Math.max(2,pairCount));for(var k=0;k<B;k++)t.bracketSlots.push(null);}
@@ -875,11 +877,11 @@ function callSection(v){
 function leagueMatrixAdminHtml(lg){
   var ids=lg.pairIds||[];
   var byKey={};lg.matches.forEach(function(m){byKey[m.key]=m;});
-  var stById={};lg.standings.forEach(function(r,idx){stById[r.id]={w:r.w,l:r.l,rank:idx+1};});
+  var stById={};lg.standings.forEach(function(r,idx){stById[r.id]={w:r.w,l:r.l,diff:r.diff,rank:idx+1};});
   var ord={};lg.matches.forEach(function(m,i){ord[m.key]=i+1;});
   var h='<div class="mtxwrap"><table class="mtx"><tr><th class="name diag"></th>';
   ids.forEach(function(id,i){h+='<th>'+(i+1)+'</th>';});
-  h+='<th>勝敗</th><th>順位</th></tr>';
+  h+='<th>勝敗</th><th>差</th><th>順位</th></tr>';
   ids.forEach(function(rid,i){
     var st=stById[rid]||{w:0,l:0,rank:''};
     h+='<tr><td class="name">'+(i+1)+' '+pairName(T,rid)+(pairTeam(T,rid)?' <small>（'+pairTeam(T,rid)+'）</small>':'')+'</td>';
@@ -895,7 +897,7 @@ function leagueMatrixAdminHtml(lg){
       if(mm&&mm.ga!=null){var rs=(mm.a===rid)?mm.ga:mm.gb;var cs=(mm.a===rid)?mm.gb:mm.ga;cell=(rs>cs)?('<span class="maru">'+rs+'</span>'):String(rs);}
       h+='<td>'+cell+'</td>';
     });
-    h+='<td class="wl">'+st.w+' - '+st.l+'</td><td class="'+(st.rank&&st.rank<=T.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
+    h+='<td class="wl">'+st.w+' - '+st.l+'</td><td>'+(st.diff>0?'+':'')+(st.diff||0)+'</td><td class="'+(st.rank&&st.rank<=T.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
   });
   h+='</table></div>';
   return h;
@@ -911,6 +913,33 @@ function matrixScoreEdit(key,rid,cid){
   if(T.playing)delete T.playing['lg:'+key];
   save();
 }
+function rankOverrideHtml(lg,li){
+  var ids=lg.pairIds||[];
+  if(ids.length<2)return '';
+  var active=!!(T.rankOverride&&T.rankOverride[li]);
+  var h='<h3 style="margin:12px 0 6px">順位の手動修正'+(active?' <span style="color:#c62828">（手動調整中）</span>':'')+'</h3>';
+  lg.standings.forEach(function(r,idx){
+    h+='<div class="pairrow"><span style="flex:1">'+(idx+1)+'位　'+pairName(T,r.id)+' <small>（'+r.w+'勝'+r.l+'敗・差'+(r.diff>0?'+':'')+r.diff+'）</small></span>'
+      +'<button class="sub" onclick="rankMove('+li+','+r.id+',-1)"'+(idx===0?' disabled':'')+'>↑</button> '
+      +'<button class="sub" onclick="rankMove('+li+','+r.id+',1)"'+(idx===lg.standings.length-1?' disabled':'')+'>↓</button></div>';
+  });
+  if(active)h+='<p><button class="sub" onclick="rankAuto('+li+')">自動計算に戻す</button></p>';
+  return h;
+}
+function rankMove(li,id,dir){
+  var v=buildView(T);if(!v||!v.leagues[li])return;
+  var order=v.leagues[li].standings.map(function(r){return r.id;});
+  var ix=order.indexOf(id);var jx=ix+dir;
+  if(ix<0||jx<0||jx>=order.length)return;
+  var tmp=order[ix];order[ix]=order[jx];order[jx]=tmp;
+  if(!T.rankOverride)T.rankOverride={};
+  T.rankOverride[li]=order;
+  save();
+}
+function rankAuto(li){
+  if(T.rankOverride)delete T.rankOverride[li];
+  save();
+}
 function leagueInputSection(v){
   var h='';
   v.leagues.forEach(function(lg,li){
@@ -920,11 +949,9 @@ function leagueInputSection(v){
       h+=leagueMatrixAdminHtml(lg);
       h+='<div class="hint">上側のセルに「その行のペアの得点 − 相手の得点」を入力してください。反対側のセルには自動で反転して表示されます</div>';
     }
-    h+='<h3>順位表</h3><table><tr><th>順位</th><th class="name">ペア</th><th>勝</th><th>負</th><th>得</th><th>失</th><th>差</th></tr>';
-    lg.standings.forEach(function(r,idx){
-      h+='<tr class="'+(idx<T.advanceCount?'qualify':'')+(idx===0?' rank1':'')+'"><td>'+(idx+1)+'</td><td class="name">'+pairName(T,r.id)+(pairTeam(T,r.id)?' <small>（'+pairTeam(T,r.id)+'）</small>':'')+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td><td>'+(r.diff>0?'+':'')+r.diff+'</td></tr>';
-    });
-    h+='</table></div>';
+    h+='<div class="hint">順位は勝数・得失差・総得点・直接対決の順で自動計算されます。得失差などが同点で順位を直したいときは、下の↑↓で入れ替えてください（手動の順位が優先されます）</div>';
+    h+=rankOverrideHtml(lg,li);
+    h+='</div>';
   });
   return h;
 }
