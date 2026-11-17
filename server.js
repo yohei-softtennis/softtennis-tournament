@@ -333,6 +333,14 @@ label.f{display:block;margin:10px 0 4px;font-size:13px;color:var(--dark);font-we
 .chip.bye{background:#f0f0f0;border-color:#bbb;color:#666;cursor:pointer;}
 .chip.empty{background:#fff;border-color:#ccc;color:#999;}
 .scoreinput{width:46px !important;padding:5px 4px !important;}
+.mtxwrap{overflow-x:auto;}
+table.mtx{border-collapse:collapse;width:100%;}
+table.mtx th,table.mtx td{border:1px solid #bbb;padding:4px 3px;text-align:center;font-size:13px;min-width:32px;background:#fff;}
+table.mtx td.diag,table.mtx th.diag{background:linear-gradient(to top right,transparent calc(50% - 1px),#bbb calc(50% - 1px),#bbb calc(50% + 1px),transparent calc(50% + 1px));background-color:#f4f4f4;}
+table.mtx .ord{display:block;font-size:10px;color:#999;text-align:left;line-height:1.1;}
+table.mtx td.wl{font-weight:bold;white-space:nowrap;}
+table.mtx td.qrk{color:var(--dark);font-weight:800;}
+table.mtx input{width:32px !important;padding:3px 1px !important;font-size:13px;}
 .pairrow{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
 .pairrow .no{width:22px;text-align:right;color:var(--gray);font-size:12px;}
 .pairrow input[type=text]{flex:1;min-width:110px;}
@@ -395,17 +403,13 @@ function render(){
   if(t.format==='league_tournament'){
     v.leagues.forEach(function(lg,li){
       html+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ</h2>';
+      html+=leagueMatrixHtml(t,lg);
+      html+='<div class="hint">セルの数字は、その行のペアから見たスコアです</div>';
       html+='<h3>順位表</h3><table><tr><th>順位</th><th class="name">ペア</th><th>勝</th><th>負</th><th>得</th><th>失</th><th>差</th></tr>';
       lg.standings.forEach(function(r,idx){
         html+='<tr class="'+(idx<t.advanceCount?'qualify':'')+(idx===0?' rank1':'')+'"><td>'+(idx+1)+'</td><td class="name">'+pairName(t,r.id)+(pairTeam(t,r.id)?' <small>（'+pairTeam(t,r.id)+'）</small>':'')+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td><td>'+(r.diff>0?'+':'')+r.diff+'</td></tr>';
       });
       html+='</table><div class="hint">上位'+t.advanceCount+'ペアがトーナメントへ進出します（リーグの全試合が終わると確定します）</div>';
-      html+='<h3>対戦結果</h3>';
-      if(lg.matches.length===0){html+='<div class="hint">対戦はまだありません</div>';}
-      lg.matches.forEach(function(m){
-        var sc=(m.ga==null)?'－':('<span class="'+(m.winner===m.a?'wnum':'')+'">'+m.ga+'</span> - <span class="'+(m.winner===m.b?'wnum':'')+'">'+m.gb+'</span>');
-        html+='<div class="matchline"><span class="pairname'+(m.winner===m.a?' winname':'')+'">'+pairName(t,m.a)+'<span class="team">'+pairTeam(t,m.a)+'</span></span><span class="score">'+sc+'</span><span class="pairname'+(m.winner===m.b?' winname':'')+'" style="text-align:right">'+pairName(t,m.b)+'<span class="team">'+pairTeam(t,m.b)+'</span></span></div>';
-      });
       html+='</div>';
     });
   }
@@ -431,6 +435,30 @@ function render(){
     html+='</div>';
   }
   app.innerHTML=html;
+}
+function leagueMatrixHtml(t,lg){
+  var ids=lg.pairIds||[];
+  var byKey={};lg.matches.forEach(function(m){byKey[m.key]=m;});
+  var stById={};lg.standings.forEach(function(r,idx){stById[r.id]={w:r.w,l:r.l,rank:idx+1};});
+  var ord={};lg.matches.forEach(function(m,i){ord[m.key]=i+1;});
+  var h='<div class="mtxwrap"><table class="mtx"><tr><th class="name diag"></th>';
+  ids.forEach(function(id,i){h+='<th>'+(i+1)+'</th>';});
+  h+='<th>勝敗</th><th>順位</th></tr>';
+  ids.forEach(function(rid,i){
+    var st=stById[rid]||{w:0,l:0,rank:''};
+    h+='<tr><td class="name">'+(i+1)+' '+pairName(t,rid)+(pairTeam(t,rid)?' <small>（'+pairTeam(t,rid)+'）</small>':'')+'</td>';
+    ids.forEach(function(cid,j){
+      if(i===j){h+='<td class="diag"></td>';return;}
+      var key=(i<j)?(rid+'|'+cid):(cid+'|'+rid);
+      var m=byKey[key];var cell='';
+      if(m&&m.ga!=null){var rs=(m.a===rid)?m.ga:m.gb;var cs=(m.a===rid)?m.gb:m.ga;cell=(rs>cs?'<b>'+rs+'</b>':rs)+' - '+(cs>rs?'<b>'+cs+'</b>':cs);}
+      if(i<j&&m){cell='<span class="ord">'+circledNum(ord[key])+'</span>'+cell;}
+      h+='<td>'+cell+'</td>';
+    });
+    h+='<td class="wl">'+st.w+' - '+st.l+'</td><td class="'+(st.rank&&st.rank<=t.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
+  });
+  h+='</table></div>';
+  return h;
 }
 function bmatchHtml(t,m){
   function row(v,sc,isWin,label){
@@ -758,16 +786,54 @@ function callSection(v){
   h+='</div>';
   return h;
 }
+function leagueMatrixAdminHtml(lg){
+  var ids=lg.pairIds||[];
+  var byKey={};lg.matches.forEach(function(m){byKey[m.key]=m;});
+  var stById={};lg.standings.forEach(function(r,idx){stById[r.id]={w:r.w,l:r.l,rank:idx+1};});
+  var ord={};lg.matches.forEach(function(m,i){ord[m.key]=i+1;});
+  var h='<div class="mtxwrap"><table class="mtx"><tr><th class="name diag"></th>';
+  ids.forEach(function(id,i){h+='<th>'+(i+1)+'</th>';});
+  h+='<th>勝敗</th><th>順位</th></tr>';
+  ids.forEach(function(rid,i){
+    var st=stById[rid]||{w:0,l:0,rank:''};
+    h+='<tr><td class="name">'+(i+1)+' '+pairName(T,rid)+(pairTeam(T,rid)?' <small>（'+pairTeam(T,rid)+'）</small>':'')+'</td>';
+    ids.forEach(function(cid,j){
+      if(i===j){h+='<td class="diag"></td>';return;}
+      if(i<j){
+        var key=rid+'|'+cid;var m=byKey[key];var rv='',cv='';
+        if(m&&m.ga!=null){rv=(m.a===rid)?m.ga:m.gb;cv=(m.a===rid)?m.gb:m.ga;}
+        h+='<td><span class="ord">'+(m?circledNum(ord[key]):'')+'</span><input type="number" id="mx-'+key+'-r" min="0" max="99" value="'+rv+'" onchange="matrixScoreEdit(\\''+key+'\\','+rid+','+cid+')"> - <input type="number" id="mx-'+key+'-c" min="0" max="99" value="'+cv+'" onchange="matrixScoreEdit(\\''+key+'\\','+rid+','+cid+')"></td>';
+        return;
+      }
+      var key2=cid+'|'+rid;var mm=byKey[key2];var cell='';
+      if(mm&&mm.ga!=null){var rs=(mm.a===rid)?mm.ga:mm.gb;var cs=(mm.a===rid)?mm.gb:mm.ga;cell=(rs>cs?'<b>'+rs+'</b>':rs)+' - '+(cs>rs?'<b>'+cs+'</b>':cs);}
+      h+='<td>'+cell+'</td>';
+    });
+    h+='<td class="wl">'+st.w+' - '+st.l+'</td><td class="'+(st.rank&&st.rank<=T.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
+  });
+  h+='</table></div>';
+  return h;
+}
+function matrixScoreEdit(key,rid,cid){
+  var er=document.getElementById('mx-'+key+'-r'),ec=document.getElementById('mx-'+key+'-c');
+  if(!er||!ec)return;
+  var vr=er.value===''?null:parseInt(er.value,10),vc=ec.value===''?null:parseInt(ec.value,10);
+  if(vr===null&&vc===null){delete T.leagueScores[key];if(T.playing)delete T.playing['lg:'+key];save();return;}
+  if(vr===null||vc===null){showMsg('スコアは両方入力してください',true);return;}
+  if(vr===vc){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);return;}
+  T.leagueScores[key]={a:rid,b:cid,ga:vr,gb:vc};
+  if(T.playing)delete T.playing['lg:'+key];
+  save();
+}
 function leagueInputSection(v){
   var h='';
   v.leagues.forEach(function(lg,li){
     h+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ｜結果入力と順位</h2>';
     if(lg.matches.length===0){h+='<div class="hint">ペアを割り振ると対戦が表示されます</div>';}
-    lg.matches.forEach(function(m){
-      h+='<div class="matchline"><span class="pairname'+(m.winner===m.a?' winname':'')+'">'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'
-        +scoreInputs('lg',m.key,m.a,m.b,m.ga,m.gb)
-        +'<span class="pairname'+(m.winner===m.b?' winname':'')+'" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
-    });
+    else{
+      h+=leagueMatrixAdminHtml(lg);
+      h+='<div class="hint">上側のセルに「その行のペアの得点 − 相手の得点」を入力してください。反対側のセルには自動で反転して表示されます</div>';
+    }
     h+='<h3>順位表</h3><table><tr><th>順位</th><th class="name">ペア</th><th>勝</th><th>負</th><th>得</th><th>失</th><th>差</th></tr>';
     lg.standings.forEach(function(r,idx){
       h+='<tr class="'+(idx<T.advanceCount?'qualify':'')+(idx===0?' rank1':'')+'"><td>'+(idx+1)+'</td><td class="name">'+pairName(T,r.id)+(pairTeam(T,r.id)?' <small>（'+pairTeam(T,r.id)+'）</small>':'')+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td><td>'+(r.diff>0?'+':'')+r.diff+'</td></tr>';
