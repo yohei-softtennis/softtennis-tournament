@@ -297,6 +297,7 @@ tr.qualify td{background:#f2fbf5;}
 .bkbox{position:absolute;}
 .bkbox .bmatch{margin:0;}
 .bklabel{position:absolute;text-align:center;color:#fff;background:var(--green);border-radius:6px;padding:4px 0;font-size:13px;font-weight:bold;}
+.bkno{position:absolute;top:-8px;left:-6px;background:var(--green);color:#fff;border:2px solid #fff;border-radius:50%;min-width:19px;height:19px;line-height:19px;text-align:center;font-size:11px;font-weight:800;z-index:2;padding:0 2px;box-sizing:border-box;}
 .round{flex:1;min-width:180px;}
 .round h4{margin:0 0 8px;font-size:13px;color:#fff;background:var(--green);border-radius:6px;padding:4px 8px;text-align:center;}
 .bmatch{border:1px solid var(--border);border-radius:8px;padding:7px 8px;margin-bottom:10px;background:#fff;font-size:12.5px;}
@@ -492,7 +493,7 @@ function bracketHtml(t,v){
   rounds.forEach(function(matches,r){
     h+='<div class="bklabel" style="left:'+(r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
     matches.forEach(function(m,j){
-      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px">'+bmatchHtml(t,m)+'</div>';
+      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px"><span class="bkno">'+(j+1)+'</span>'+bmatchHtml(t,m)+'</div>';
     });
   });
   h+='</div></div>';
@@ -921,7 +922,7 @@ function bracketAdminHtml(v){
   rounds.forEach(function(matches,r){
     h+='<div class="bklabel" style="left:'+(r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
     matches.forEach(function(m,j){
-      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px">'+bmatchAdminHtml(m)+'</div>';
+      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px"><span class="bkno">'+(j+1)+'</span>'+bmatchAdminHtml(m)+'</div>';
     });
   });
   h+='</div></div>';
