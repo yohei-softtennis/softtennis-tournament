@@ -341,6 +341,7 @@ table.mtx .ord{display:block;font-size:10px;color:#999;text-align:left;line-heig
 table.mtx td.wl{font-weight:bold;white-space:nowrap;}
 table.mtx td.qrk{color:var(--dark);font-weight:800;}
 table.mtx input{width:32px !important;padding:3px 1px !important;font-size:13px;}
+table.mtx .maru{display:inline-block;border:1.6px solid #c62828;color:#c62828;border-radius:50%;min-width:20px;line-height:20px;padding:0 2px;font-weight:800;}
 .pairrow{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;}
 .pairrow .no{width:22px;text-align:right;color:var(--gray);font-size:12px;}
 .pairrow input[type=text]{flex:1;min-width:110px;}
@@ -404,7 +405,7 @@ function render(){
     v.leagues.forEach(function(lg,li){
       html+='<div class="card"><h2>'+String.fromCharCode(65+li)+'リーグ</h2>';
       html+=leagueMatrixHtml(t,lg);
-      html+='<div class="hint">セルの数字は、その行のペアから見たスコアです</div>';
+      html+='<div class="hint">セルの数字は、その行のペアの獲得ゲーム数です（丸囲みは勝ち）</div>';
       html+='<h3>順位表</h3><table><tr><th>順位</th><th class="name">ペア</th><th>勝</th><th>負</th><th>得</th><th>失</th><th>差</th></tr>';
       lg.standings.forEach(function(r,idx){
         html+='<tr class="'+(idx<t.advanceCount?'qualify':'')+(idx===0?' rank1':'')+'"><td>'+(idx+1)+'</td><td class="name">'+pairName(t,r.id)+(pairTeam(t,r.id)?' <small>（'+pairTeam(t,r.id)+'）</small>':'')+'</td><td>'+r.w+'</td><td>'+r.l+'</td><td>'+r.gf+'</td><td>'+r.ga+'</td><td>'+(r.diff>0?'+':'')+r.diff+'</td></tr>';
@@ -451,7 +452,7 @@ function leagueMatrixHtml(t,lg){
       if(i===j){h+='<td class="diag"></td>';return;}
       var key=(i<j)?(rid+'|'+cid):(cid+'|'+rid);
       var m=byKey[key];var cell='';
-      if(m&&m.ga!=null){var rs=(m.a===rid)?m.ga:m.gb;var cs=(m.a===rid)?m.gb:m.ga;cell=(rs>cs?'<b>'+rs+'</b>':rs)+' - '+(cs>rs?'<b>'+cs+'</b>':cs);}
+      if(m&&m.ga!=null){var rs=(m.a===rid)?m.ga:m.gb;var cs=(m.a===rid)?m.gb:m.ga;cell=(rs>cs)?('<span class="maru">'+rs+'</span>'):String(rs);}
       if(i<j&&m){cell='<span class="ord">'+circledNum(ord[key])+'</span>'+cell;}
       h+='<td>'+cell+'</td>';
     });
@@ -806,7 +807,7 @@ function leagueMatrixAdminHtml(lg){
         return;
       }
       var key2=cid+'|'+rid;var mm=byKey[key2];var cell='';
-      if(mm&&mm.ga!=null){var rs=(mm.a===rid)?mm.ga:mm.gb;var cs=(mm.a===rid)?mm.gb:mm.ga;cell=(rs>cs?'<b>'+rs+'</b>':rs)+' - '+(cs>rs?'<b>'+cs+'</b>':cs);}
+      if(mm&&mm.ga!=null){var rs=(mm.a===rid)?mm.ga:mm.gb;var cs=(mm.a===rid)?mm.gb:mm.ga;cell=(rs>cs)?('<span class="maru">'+rs+'</span>'):String(rs);}
       h+='<td>'+cell+'</td>';
     });
     h+='<td class="wl">'+st.w+' - '+st.l+'</td><td class="'+(st.rank&&st.rank<=T.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
