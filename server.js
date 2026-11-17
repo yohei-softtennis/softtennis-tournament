@@ -167,6 +167,17 @@ const SHARED = [
 "    var roundsT=computeBracket(slots,t.bracketScores);annotateLabels(roundsT,null);",
 "    view.bracket={slots:slots,rounds:roundsT};",
 "  }",
+"  view.third=null;",
+"  if(t.thirdPlace&&view.bracket&&view.bracket.rounds.length>=2){",
+"    var RR=view.bracket.rounds.length;var semis=view.bracket.rounds[RR-2];",
+"    if(semis.length===2){",
+"      var loserOf=function(m){if(m.winner==null||m.winner==='BYE')return null;if(typeof m.a!=='number'||typeof m.b!=='number')return null;return (m.winner===m.a)?m.b:m.a;};",
+"      var la3=loserOf(semis[0]),lb3=loserOf(semis[1]);",
+"      var ga3=null,gb3=null,win3=null;var sc3=t.thirdScore;",
+"      if(la3!=null&&lb3!=null&&sc3&&sc3.a===la3&&sc3.b===lb3){ga3=sc3.ga;gb3=sc3.gb;if(ga3>gb3)win3=la3;else if(gb3>ga3)win3=lb3;}",
+"      view.third={a:la3,b:lb3,ga:ga3,gb:gb3,winner:win3,key:'third',la:roundName(RR,RR-2)+circledNum(1)+'\u306e\u6557\u8005',lb:roundName(RR,RR-2)+circledNum(2)+'\u306e\u6557\u8005'};",
+"    }",
+"  }",
 "  return view;}",
 "function shuffleArr(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}return a;}",
 "function leaguePenalty(t,leagues){",
@@ -225,7 +236,7 @@ const SHARED = [
 "    (t.leagueAssignment||[]).forEach(function(lg){leagueMatchList(lg).forEach(function(m){valid[m.key]=true;});});",
 "    for(var k2 in t.leagueScores){if(!valid[k2])delete t.leagueScores[k2];}",
 "  }",
-"  if(t.playing){for(var pk in t.playing){if(pk.indexOf('br:')===0){var pv=t.playing[pk];if(!pv||typeof pv!=='object')delete t.playing[pk];}}}",
+"  if(t.playing){for(var pk in t.playing){if(pk.indexOf('br:')===0||pk.indexOf('tp:')===0){var pv=t.playing[pk];if(!pv||typeof pv!=='object')delete t.playing[pk];}}}",
 "}",
 "function slotLabel(t,v){if(v==='BYE')return '不戦勝（BYE）';if(v==null)return '未定';var p=pairById(t,v);return p?(p.name||'（未入力）'):'未定';}",
 "function slotTeam(t,v){if(typeof v==='number'){var p=pairById(t,v);return (p&&p.team)?p.team:'';}return '';}",
@@ -234,6 +245,12 @@ const SHARED = [
 "  var maxM=0;(v.leagues||[]).forEach(function(lg){if(lg.matches.length>maxM)maxM=lg.matches.length;});",
 "  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ'});});}",
 "  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE'){var pf=t.playing?t.playing['br:'+m.key]:null;var isp=(!!pf&&typeof pf==='object'&&pf.a===m.a&&pf.b===m.b);q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:m.winner!=null,playing:isp,label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});}});});}",
+"  if(v.third&&typeof v.third.a==='number'&&typeof v.third.b==='number'){",
+"    var tm=v.third;var pf3=t.playing?t.playing['tp:third']:null;var isp3=(!!pf3&&typeof pf3==='object'&&pf3.a===tm.a&&pf3.b===tm.b);",
+"    var entry3={type:'tp',key:'tp:third',a:tm.a,b:tm.b,ga:tm.ga,gb:tm.gb,finished:tm.winner!=null,playing:isp3,label:'3\u4f4d\u6c7a\u5b9a\u6226'};",
+"    var fi3=-1;for(var qi=q.length-1;qi>=0;qi--){if(q[qi].type==='br'){fi3=qi;break;}}",
+"    if(fi3>=0)q.splice(fi3,0,entry3);else q.push(entry3);",
+"  }",
 "  var cnt={};q.forEach(function(x){if(x.playing&&!x.finished){cnt[x.a]=(cnt[x.a]||0)+1;cnt[x.b]=(cnt[x.b]||0)+1;}});",
 "  q.forEach(function(x){if(x.playing&&!x.finished&&(cnt[x.a]>1||cnt[x.b]>1))x.conflict=true;});",
 "  return q;",
@@ -431,6 +448,11 @@ function render(){
     if(lastRound.length===1&&lastRound[0].winner!=null&&lastRound[0].winner!=='BYE'){
       html+='<div class="champ">🏆 優勝：'+pairName(t,lastRound[0].winner)+(pairTeam(t,lastRound[0].winner)?'（'+pairTeam(t,lastRound[0].winner)+'）':'')+'</div>';
     }
+    if(v.third){
+      html+='<h3 style="margin:14px 0 6px">3位決定戦</h3>';
+      html+=bmatchHtml(t,v.third);
+      if(v.third.winner!=null){html+='<div class="champ">🥉 3位：'+pairName(t,v.third.winner)+(pairTeam(t,v.third.winner)?'（'+pairTeam(t,v.third.winner)+'）':'')+'</div>';}
+    }
     html+='</div>';
   }
   if(t.format==='tournament'){
@@ -609,6 +631,7 @@ function tournamentForm(isNew){
   var h='<div class="card"><h2>'+(isNew?'大会を作成する':'大会設定の変更')+'</h2>';
   h+='<label class="f">大会名</label><input type="text" id="f_name" value="'+esc(t.name)+'" placeholder="例：〇〇大会" style="width:100%">';
   h+='<label class="f">大会方式</label><select id="f_format" onchange="toggleLeagueFields()"><option value="league_tournament"'+(t.format==='league_tournament'?' selected':'')+'>リーグ戦 → トーナメント</option><option value="tournament"'+(t.format==='tournament'?' selected':'')+'>トーナメントのみ</option></select>';
+  h+='<label class="f">3位決定戦</label><select id="f_third"'+(isNew?'':' onchange="thirdPlaceEdit(this.value)"')+'><option value="0"'+(!t.thirdPlace?' selected':'')+'>実施しない</option><option value="1"'+(t.thirdPlace?' selected':'')+'>実施する</option></select>'+(isNew?'':' <span class="hint">※この項目の変更では割り振り・結果はリセットされません</span>');
   h+='<label class="f">参加ペア数</label><span class="stepper"><button type="button" onclick="stepCount(-1)">−</button><input type="number" id="f_count" value="'+t.pairCount+'" min="2" max="128"><button type="button" onclick="stepCount(1)">＋</button></span>';
   h+='<div id="league_fields">';
   h+='<label class="f">1リーグのペア数</label><span class="stepper"><button type="button" onclick="stepField(\\'f_ppl\\',-1)">−</button><input type="number" id="f_ppl" value="'+t.pairsPerLeague+'" min="3" max="16"><button type="button" onclick="stepField(\\'f_ppl\\',1)">＋</button></span>';
@@ -648,6 +671,12 @@ function doSettings(){
   T=nt;sel=null;save();
 }
 
+function thirdPlaceEdit(v){
+  if(!T)return;
+  T.thirdPlace=(v==='1');
+  if(!T.thirdPlace){T.thirdScore=null;if(T.playing)delete T.playing['tp:third'];}
+  save();
+}
 /* ---------- ペア登録 ---------- */
 function pairsForm(){
   var h='<div class="card"><h2>参加ペアの登録</h2>';
@@ -771,6 +800,14 @@ function scoreInputs(prefix,key,a,b,ga,gb){
 function scoreEdit(prefix,key,a,b){
   var ea=document.getElementById(prefix+'-'+key+'-a'),eb=document.getElementById(prefix+'-'+key+'-b');
   var va=ea.value===''?null:parseInt(ea.value,10),vb=eb.value===''?null:parseInt(eb.value,10);
+  if(prefix==='tp'){
+    if(va===null&&vb===null){T.thirdScore=null;if(T.playing)delete T.playing['tp:third'];save();return;}
+    if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
+    if(va===vb){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);return;}
+    T.thirdScore={a:a,b:b,ga:va,gb:vb};
+    if(T.playing)delete T.playing['tp:third'];
+    save();return;
+  }
   var store=(prefix==='lg')?T.leagueScores:T.bracketScores;
   if(va===null&&vb===null){delete store[key];save();return;}
   if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
@@ -782,11 +819,19 @@ function scoreEdit(prefix,key,a,b){
 function stepWait(d){var el=document.getElementById('waitCount');var v=parseInt(el.value||'0',10)+d;if(v<0)v=0;if(v>20)v=20;el.value=v;}
 function stepCourt(d){var el=document.getElementById('courtCount');var v=parseInt(el.value||'0',10)+d;if(v<1)v=1;if(v>30)v=30;el.value=v;}
 function callWaitSave(){var el=document.getElementById('waitCount');var v=parseInt(el.value,10);if(isNaN(v)||v<0)v=0;if(v>20)v=20;T.waitCount=v;var ce=document.getElementById('courtCount');var cv=parseInt(ce.value,10);if(isNaN(cv)||cv<1)cv=1;if(cv>30)cv=30;T.courtCount=cv;save();}
-function playingToggle(key,on,a,b){if(!T.playing)T.playing={};if(on){if(key.indexOf('br:')===0&&a!=null&&b!=null)T.playing[key]={a:a,b:b};else T.playing[key]=true;}else delete T.playing[key];save();}
+function playingToggle(key,on,a,b){if(!T.playing)T.playing={};if(on){if((key.indexOf('br:')===0||key.indexOf('tp:')===0)&&a!=null&&b!=null)T.playing[key]={a:a,b:b};else T.playing[key]=true;}else delete T.playing[key];save();}
 function callScoreEdit(kind,key,a,b){
-  var p=(kind==='lg')?'clg':'cbr';
+  var p=(kind==='lg')?'clg':(kind==='tp')?'ctp':'cbr';
   var ea=document.getElementById(p+'-'+key+'-a'),eb=document.getElementById(p+'-'+key+'-b');
   var va=ea.value===''?null:parseInt(ea.value,10),vb=eb.value===''?null:parseInt(eb.value,10);
+  if(kind==='tp'){
+    if(va===null&&vb===null){T.thirdScore=null;if(T.playing)delete T.playing['tp:third'];save();return;}
+    if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
+    if(va===vb){showMsg('同点は入力できません（勝敗が決まるスコアを入れてください）',true);return;}
+    T.thirdScore={a:a,b:b,ga:va,gb:vb};
+    if(T.playing)delete T.playing['tp:third'];
+    save();return;
+  }
   var store=(kind==='lg')?T.leagueScores:T.bracketScores;
   if(va===null&&vb===null){delete store[key];save();return;}
   if(va===null||vb===null){showMsg('スコアは両方入力してください',true);return;}
@@ -802,7 +847,7 @@ function callSection(v){
   h+='<label class="f">コート数</label><span class="stepper"><button type="button" onclick="stepCourt(-1)">−</button><input type="number" id="courtCount" value="'+(typeof T.courtCount==='number'?T.courtCount:4)+'" min="1" max="30"><button type="button" onclick="stepCourt(1)">＋</button></span> <button class="sub" onclick="callWaitSave()">呼び出し設定を保存</button>';
   h+='<div class="hint">待機ゲーム数のぶんだけ、次の試合が「待機（呼び出し中）」になります。待機は、同じペアの試合が重ならず、各ペアの試合間隔が空きすぎない順番で選ばれます。試合がコートに入ったら「試合中」にチェックを入れてください。結果を入力すると、その試合のチェックは自動で外れます。トーナメントの試合は、対戦相手が確定した時点で呼び出しの対象になります。</div>';
   function row(m,checked,badge){
-    var p=(m.type==='lg')?'clg':'cbr';var raw=m.key.slice(3);
+    var p=(m.type==='lg')?'clg':(m.type==='tp')?'ctp':'cbr';var raw=m.key.slice(3);
     var inputs='<span class="scorein"><input type="number" id="'+p+'-'+raw+'-a" min="0" max="9" value="'+(m.ga==null?'':m.ga)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"> − <input type="number" id="'+p+'-'+raw+'-b" min="0" max="9" value="'+(m.gb==null?'':m.gb)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"></span>';
     return '<div class="matchline'+(m.conflict?' conflict':'')+'"><label style="flex:none"><input type="checkbox" '+(checked?'checked':'')+' onchange="playingToggle(\\''+m.key+'\\',this.checked,'+m.a+','+m.b+')"> 試合中</label><span class="pairname"><span class="ctx">'+(badge?badge+'｜':'')+esc(m.label)+'</span>'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'+inputs+'<span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
   }
@@ -881,6 +926,19 @@ function leagueInputSection(v){
   });
   return h;
 }
+function thirdMatchAdminHtml(m){
+  function row(v,sc,isWin,label){
+    if(v==='BYE')return '<div class="row bye"><span>不戦勝（BYE）</span><span class="sc"></span></div>';
+    if(v==null)return '<div class="row bye"><span>'+(label?esc(label):'未定')+'</span><span class="sc"></span></div>';
+    return '<div class="row'+(isWin?' win':'')+'"><span class="'+(isWin?'winname':'')+'">'+pairName(T,v)+'</span><span class="sc'+(isWin?' win':'')+'">'+(sc==null?'':sc)+'</span></div>';
+  }
+  var h='<div class="bmatch">'+row(m.a,m.ga,m.winner===m.a&&m.a!=null,m.la)+row(m.b,m.gb,m.winner===m.b&&m.b!=null,m.lb);
+  if(typeof m.a==='number'&&typeof m.b==='number'){
+    h+='<div style="text-align:center;margin-top:4px">'+scoreInputs('tp','third',m.a,m.b,m.ga,m.gb)+'</div>';
+  }
+  h+='</div>';
+  return h;
+}
 function bracketSection(v){
   var h='<div class="card"><h2>トーナメント表</h2>';
   if(!v.bracket||v.bracket.rounds.length===0){h+='<div class="hint">対戦相手が決まると表示されます</div></div>';return h;}
@@ -888,6 +946,11 @@ function bracketSection(v){
   var lastRound=v.bracket.rounds[v.bracket.rounds.length-1];
   if(lastRound.length===1&&lastRound[0].winner!=null&&lastRound[0].winner!=='BYE'){
     h+='<div class="champ">🏆 優勝：'+pairName(T,lastRound[0].winner)+'</div>';
+  }
+  if(v.third){
+    h+='<h3 style="margin:14px 0 6px">3位決定戦</h3>';
+    h+=thirdMatchAdminHtml(v.third);
+    if(v.third.winner!=null){h+='<div class="champ">🥉 3位：'+pairName(T,v.third.winner)+'</div>';}
   }
   h+='</div>';
   return h;
