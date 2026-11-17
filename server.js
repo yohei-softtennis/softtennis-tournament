@@ -289,6 +289,14 @@ tr.qualify td{background:#f2fbf5;}
 .bmatch .row.win{background:#e6f6ec;border-radius:5px;}
 .bmatch .row .sc.win{background:#1d9e4b;color:#fff;border-radius:50%;width:23px;height:23px;line-height:23px;text-align:center;font-weight:800;flex:none;}
 .bracket{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;}
+.bkwrap{overflow-x:auto;padding-bottom:6px;}
+.bk{position:relative;}
+.bk svg{position:absolute;left:0;top:0;pointer-events:none;}
+.bk path{fill:none;stroke:#c9c9c9;stroke-width:1.6;}
+.bk path.win{stroke:#1d9e4b;stroke-width:2.8;}
+.bkbox{position:absolute;}
+.bkbox .bmatch{margin:0;}
+.bklabel{position:absolute;text-align:center;color:#fff;background:var(--green);border-radius:6px;padding:4px 0;font-size:13px;font-weight:bold;}
 .round{flex:1;min-width:180px;}
 .round h4{margin:0 0 8px;font-size:13px;color:#fff;background:var(--green);border-radius:6px;padding:4px 8px;text-align:center;}
 .bmatch{border:1px solid var(--border);border-radius:8px;padding:7px 8px;margin-bottom:10px;background:#fff;font-size:12.5px;}
@@ -322,6 +330,7 @@ label.f{display:block;margin:10px 0 4px;font-size:13px;color:var(--dark);font-we
   body{background:#fff;}
   .card{box-shadow:none;border:1px solid #bbb;break-inside:avoid;}
   .bracket{overflow:visible;flex-wrap:wrap;}
+  .bkwrap{overflow:visible;}
 }
 .err{color:#b3261e;font-size:13px;}
 .ok{color:var(--green);font-size:13px;}
@@ -415,15 +424,8 @@ function render(){
     });
   }
   if(v.bracket&&v.bracket.rounds.length>0){
-    html+='<div class="card"><h2>トーナメント表</h2><div class="bracket">';
-    v.bracket.rounds.forEach(function(matches,r){
-      html+='<div class="round"><h4>'+roundName(v.bracket.rounds.length,r)+'</h4>';
-      matches.forEach(function(m){
-        html+=bmatchHtml(t,m);
-      });
-      html+='</div>';
-    });
-    html+='</div>';
+    html+='<div class="card"><h2>トーナメント表</h2>';
+    html+=bracketHtml(t,v);
     var lastRound=v.bracket.rounds[v.bracket.rounds.length-1];
     if(lastRound.length===1&&lastRound[0].winner!=null&&lastRound[0].winner!=='BYE'){
       html+='<div class="champ">🏆 優勝：'+pairName(t,lastRound[0].winner)+(pairTeam(t,lastRound[0].winner)?'（'+pairTeam(t,lastRound[0].winner)+'）':'')+'</div>';
@@ -459,6 +461,41 @@ function leagueMatrixHtml(t,lg){
     h+='<td class="wl">'+st.w+' - '+st.l+'</td><td class="'+(st.rank&&st.rank<=t.advanceCount?'qrk':'')+'">'+st.rank+'</td></tr>';
   });
   h+='</table></div>';
+  return h;
+}
+function bracketHtml(t,v){
+  var rounds=v.bracket.rounds,R=rounds.length;
+  var BW=172,GX=36,HEAD=28,PITCH=96,BH=60,RA=17,RB=39;
+  var centers=[],tops=[];
+  rounds.forEach(function(matches,r){
+    centers.push([]);tops.push([]);
+    matches.forEach(function(m,j){
+      var c=(r===0)?PITCH*(j+0.5):(centers[r-1][j*2]+centers[r-1][j*2+1])/2;
+      centers[r].push(c);tops[r].push(c-BH/2);
+    });
+  });
+  var W=R*(BW+GX)-GX,H=HEAD+PITCH*rounds[0].length;
+  var h='<div class="bkwrap"><div class="bk" style="width:'+W+'px;height:'+H+'px">';
+  h+='<svg width="'+W+'" height="'+H+'">';
+  rounds.forEach(function(matches,r){
+    if(r===R-1)return;
+    matches.forEach(function(m,j){
+      var tj=Math.floor(j/2),toA=(j%2===0);
+      var sx=r*(BW+GX)+BW;
+      var sy=HEAD+tops[r][j]+((m.winner!=null&&m.winner!=='BYE')?(m.winner===m.a?RA:RB):BH/2);
+      var ex=(r+1)*(BW+GX),ey=HEAD+tops[r+1][tj]+(toA?RA:RB);
+      var mx=sx+GX/2;
+      h+='<path'+((m.winner!=null&&m.winner!=='BYE')?' class="win"':'')+' d="M '+sx+' '+sy+' H '+mx+' V '+ey+' H '+ex+'"/>';
+    });
+  });
+  h+='</svg>';
+  rounds.forEach(function(matches,r){
+    h+='<div class="bklabel" style="left:'+(r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
+    matches.forEach(function(m,j){
+      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px">'+bmatchHtml(t,m)+'</div>';
+    });
+  });
+  h+='</div></div>';
   return h;
 }
 function bmatchHtml(t,m){
@@ -846,18 +883,48 @@ function leagueInputSection(v){
 function bracketSection(v){
   var h='<div class="card"><h2>トーナメント表</h2>';
   if(!v.bracket||v.bracket.rounds.length===0){h+='<div class="hint">対戦相手が決まると表示されます</div></div>';return h;}
-  h+='<div class="bracket">';
-  v.bracket.rounds.forEach(function(matches,r){
-    h+='<div class="round"><h4>'+roundName(v.bracket.rounds.length,r)+'</h4>';
-    matches.forEach(function(m){h+=bmatchAdminHtml(m);});
-    h+='</div>';
-  });
-  h+='</div>';
+  h+=bracketAdminHtml(v);
   var lastRound=v.bracket.rounds[v.bracket.rounds.length-1];
   if(lastRound.length===1&&lastRound[0].winner!=null&&lastRound[0].winner!=='BYE'){
     h+='<div class="champ">🏆 優勝：'+pairName(T,lastRound[0].winner)+'</div>';
   }
   h+='</div>';
+  return h;
+}
+function bracketAdminHtml(v){
+  var rounds=v.bracket.rounds,R=rounds.length;
+  var BW=172,GX=36,HEAD=28,PITCH=140,RA=17,RB=39;
+  function boxH(m){var hh=60;if(typeof m.a==='number'&&typeof m.b==='number')hh+=38;else if(m.winner!=null&&m.winner!=='BYE')hh+=20;return hh;}
+  var centers=[],tops=[];
+  rounds.forEach(function(matches,r){
+    centers.push([]);tops.push([]);
+    matches.forEach(function(m,j){
+      var c=(r===0)?PITCH*(j+0.5):(centers[r-1][j*2]+centers[r-1][j*2+1])/2;
+      centers[r].push(c);tops[r].push(c-boxH(m)/2);
+    });
+  });
+  var W=R*(BW+GX)-GX,H=HEAD+PITCH*rounds[0].length;
+  var h='<div class="bkwrap"><div class="bk" style="width:'+W+'px;height:'+H+'px">';
+  h+='<svg width="'+W+'" height="'+H+'">';
+  rounds.forEach(function(matches,r){
+    if(r===R-1)return;
+    matches.forEach(function(m,j){
+      var tj=Math.floor(j/2),toA=(j%2===0);
+      var sx=r*(BW+GX)+BW;
+      var sy=HEAD+tops[r][j]+((m.winner!=null&&m.winner!=='BYE')?(m.winner===m.a?RA:RB):boxH(m)/2);
+      var ex=(r+1)*(BW+GX),ey=HEAD+tops[r+1][tj]+(toA?RA:RB);
+      var mx=sx+GX/2;
+      h+='<path'+((m.winner!=null&&m.winner!=='BYE')?' class="win"':'')+' d="M '+sx+' '+sy+' H '+mx+' V '+ey+' H '+ex+'"/>';
+    });
+  });
+  h+='</svg>';
+  rounds.forEach(function(matches,r){
+    h+='<div class="bklabel" style="left:'+(r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
+    matches.forEach(function(m,j){
+      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px">'+bmatchAdminHtml(m)+'</div>';
+    });
+  });
+  h+='</div></div>';
   return h;
 }
 function bmatchAdminHtml(m){
