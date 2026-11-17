@@ -488,7 +488,7 @@ function leagueMatrixHtml(t,lg){
 }
 function bracketHtml(t,v){
   var rounds=v.bracket.rounds,R=rounds.length;
-  var BW=172,GX=36,HEAD=28,PITCH=96,BH=60,RA=17,RB=39;
+  var BW=172,GX=36,HEAD=38,PADL=12,PITCH=96,BH=60,RA=17,RB=39;
   var centers=[],tops=[];
   rounds.forEach(function(matches,r){
     centers.push([]);tops.push([]);
@@ -497,25 +497,25 @@ function bracketHtml(t,v){
       centers[r].push(c);tops[r].push(c-BH/2);
     });
   });
-  var W=R*(BW+GX)-GX,H=HEAD+PITCH*rounds[0].length;
+  var W=PADL+R*(BW+GX)-GX+6,H=HEAD+PITCH*rounds[0].length;
   var h='<div class="bkwrap"><div class="bk" style="width:'+W+'px;height:'+H+'px">';
   h+='<svg width="'+W+'" height="'+H+'">';
   rounds.forEach(function(matches,r){
     if(r===R-1)return;
     matches.forEach(function(m,j){
       var tj=Math.floor(j/2),toA=(j%2===0);
-      var sx=r*(BW+GX)+BW;
+      var sx=PADL+r*(BW+GX)+BW;
       var sy=HEAD+tops[r][j]+((m.winner!=null&&m.winner!=='BYE')?(m.winner===m.a?RA:RB):BH/2);
-      var ex=(r+1)*(BW+GX),ey=HEAD+tops[r+1][tj]+(toA?RA:RB);
+      var ex=PADL+(r+1)*(BW+GX),ey=HEAD+tops[r+1][tj]+(toA?RA:RB);
       var mx=sx+GX/2;
       h+='<path'+((m.winner!=null&&m.winner!=='BYE')?' class="win"':'')+' d="M '+sx+' '+sy+' H '+mx+' V '+ey+' H '+ex+'"/>';
     });
   });
   h+='</svg>';
   rounds.forEach(function(matches,r){
-    h+='<div class="bklabel" style="left:'+(r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
+    h+='<div class="bklabel" style="left:'+(PADL+r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
     matches.forEach(function(m,j){
-      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px"><span class="bkno">'+(j+1)+'</span>'+bmatchHtml(t,m)+'</div>';
+      h+='<div class="bkbox" style="left:'+(PADL+r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px"><span class="bkno">'+(j+1)+'</span>'+bmatchHtml(t,m)+'</div>';
     });
   });
   h+='</div></div>';
@@ -620,7 +620,7 @@ function doLogout(){localStorage.removeItem('st_admin_token');token='';T=null;in
 function newTid(){return 't'+Date.now().toString(36)+Math.floor(Math.random()*100000).toString(36);}
 function blankTournament(name,format,pairCount,ppl,adv){
   var t={id:newTid(),name:name,format:format,pairCount:pairCount,pairsPerLeague:ppl,advanceCount:adv,
-    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},waitCount:3,courtCount:4,playing:{}};
+    separateTeams:true,separateSeeds:true,pairs:[],leagueAssignment:[],bracketSlots:[],leagueScores:{},bracketScores:{},thirdPlace:false,thirdScore:null,waitCount:3,courtCount:4,playing:{}};
   for(var i=1;i<=pairCount;i++)t.pairs.push({id:i,name:'',team:'',seed:false});
   if(format==='league_tournament'){var L=leagueCount(t);for(var j=0;j<L;j++)t.leagueAssignment.push([]);}
   else{var B=nextPow2(Math.max(2,pairCount));for(var k=0;k<B;k++)t.bracketSlots.push(null);}
@@ -651,12 +651,14 @@ function readForm(){
     format:document.getElementById('f_format').value,
     pairCount:Math.max(2,parseInt(document.getElementById('f_count').value||'2',10)),
     pairsPerLeague:Math.max(3,parseInt(document.getElementById('f_ppl').value||'4',10)),
-    advanceCount:Math.max(1,parseInt(document.getElementById('f_adv').value||'2',10))};
+    advanceCount:Math.max(1,parseInt(document.getElementById('f_adv').value||'2',10)),
+    thirdPlace:document.getElementById('f_third').value==='1'};
 }
 function doCreate(){
   var f=readForm();
   if(!f.name){showMsg('大会名を入力してください',true);return;}
   T=blankTournament(f.name,f.format,f.pairCount,f.pairsPerLeague,f.advanceCount);
+  T.thirdPlace=f.thirdPlace;
   DRAFT=false;sel=null;save();
 }
 function doSettings(){
@@ -666,7 +668,7 @@ function doSettings(){
   var old=T;
   var nt=blankTournament(f.name,f.format,f.pairCount,f.pairsPerLeague,f.advanceCount);
   nt.id=old.id;
-  nt.separateTeams=old.separateTeams;nt.separateSeeds=old.separateSeeds;
+  nt.separateTeams=old.separateTeams;nt.separateSeeds=old.separateSeeds;nt.thirdPlace=f.thirdPlace;
   for(var i=0;i<Math.min(old.pairs.length,nt.pairs.length);i++){nt.pairs[i].name=old.pairs[i].name;nt.pairs[i].team=old.pairs[i].team;nt.pairs[i].seed=old.pairs[i].seed;}
   T=nt;sel=null;save();
 }
@@ -957,7 +959,7 @@ function bracketSection(v){
 }
 function bracketAdminHtml(v){
   var rounds=v.bracket.rounds,R=rounds.length;
-  var BW=172,GX=36,HEAD=28,PITCH=140,RA=17,RB=39;
+  var BW=172,GX=36,HEAD=38,PADL=12,PITCH=140,RA=17,RB=39;
   function boxH(m){var hh=60;if(typeof m.a==='number'&&typeof m.b==='number')hh+=38;else if(m.winner!=null&&m.winner!=='BYE')hh+=20;return hh;}
   var centers=[],tops=[];
   rounds.forEach(function(matches,r){
@@ -967,25 +969,25 @@ function bracketAdminHtml(v){
       centers[r].push(c);tops[r].push(c-boxH(m)/2);
     });
   });
-  var W=R*(BW+GX)-GX,H=HEAD+PITCH*rounds[0].length;
+  var W=PADL+R*(BW+GX)-GX+6,H=HEAD+PITCH*rounds[0].length;
   var h='<div class="bkwrap"><div class="bk" style="width:'+W+'px;height:'+H+'px">';
   h+='<svg width="'+W+'" height="'+H+'">';
   rounds.forEach(function(matches,r){
     if(r===R-1)return;
     matches.forEach(function(m,j){
       var tj=Math.floor(j/2),toA=(j%2===0);
-      var sx=r*(BW+GX)+BW;
+      var sx=PADL+r*(BW+GX)+BW;
       var sy=HEAD+tops[r][j]+((m.winner!=null&&m.winner!=='BYE')?(m.winner===m.a?RA:RB):boxH(m)/2);
-      var ex=(r+1)*(BW+GX),ey=HEAD+tops[r+1][tj]+(toA?RA:RB);
+      var ex=PADL+(r+1)*(BW+GX),ey=HEAD+tops[r+1][tj]+(toA?RA:RB);
       var mx=sx+GX/2;
       h+='<path'+((m.winner!=null&&m.winner!=='BYE')?' class="win"':'')+' d="M '+sx+' '+sy+' H '+mx+' V '+ey+' H '+ex+'"/>';
     });
   });
   h+='</svg>';
   rounds.forEach(function(matches,r){
-    h+='<div class="bklabel" style="left:'+(r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
+    h+='<div class="bklabel" style="left:'+(PADL+r*(BW+GX))+'px;top:0;width:'+BW+'px">'+roundName(R,r)+'</div>';
     matches.forEach(function(m,j){
-      h+='<div class="bkbox" style="left:'+(r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px"><span class="bkno">'+(j+1)+'</span>'+bmatchAdminHtml(m)+'</div>';
+      h+='<div class="bkbox" style="left:'+(PADL+r*(BW+GX))+'px;top:'+(HEAD+tops[r][j])+'px;width:'+BW+'px"><span class="bkno">'+(j+1)+'</span>'+bmatchAdminHtml(m)+'</div>';
     });
   });
   h+='</div></div>';
