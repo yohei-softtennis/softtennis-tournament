@@ -30,7 +30,7 @@ function loadData() {
       if (!d.tournaments.some((x) => x && x.id === t.id)) d.tournaments.push(t);
       delete d.tournament;
     }
-    d.tournaments.forEach((t, i) => { if (t && !t.id) t.id = 't' + (i + 1); });
+    d.tournaments.forEach((t, i) => { if (t && !t.id) t.id = 't' + (i + 1); if (t && t.playing) { for (const k of Object.keys(t.playing)) { if (k.startsWith('br:') && t.playing[k] === true) delete t.playing[k]; } } });
     return d;
   } catch (e) { return initialData(); }
 }
@@ -225,6 +225,7 @@ const SHARED = [
 "    (t.leagueAssignment||[]).forEach(function(lg){leagueMatchList(lg).forEach(function(m){valid[m.key]=true;});});",
 "    for(var k2 in t.leagueScores){if(!valid[k2])delete t.leagueScores[k2];}",
 "  }",
+"  if(t.playing){for(var pk in t.playing){if(pk.indexOf('br:')===0){var pv=t.playing[pk];if(!pv||typeof pv!=='object')delete t.playing[pk];}}}",
 "}",
 "function slotLabel(t,v){if(v==='BYE')return '不戦勝（BYE）';if(v==null)return '未定';var p=pairById(t,v);return p?(p.name||'（未入力）'):'未定';}",
 "function slotTeam(t,v){if(typeof v==='number'){var p=pairById(t,v);return (p&&p.team)?p.team:'';}return '';}",
@@ -232,7 +233,7 @@ const SHARED = [
 "  var q=[];",
 "  var maxM=0;(v.leagues||[]).forEach(function(lg){if(lg.matches.length>maxM)maxM=lg.matches.length;});",
 "  for(var mi=0;mi<maxM;mi++){(v.leagues||[]).forEach(function(lg){var m=lg.matches[mi];if(m)q.push({type:'lg',key:'lg:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:(m.ga!=null&&m.gb!=null),playing:!!(t.playing&&t.playing['lg:'+m.key]),label:String.fromCharCode(65+lg.index)+'リーグ'});});}",
-"  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE')q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:m.winner!=null,playing:!!(t.playing&&t.playing['br:'+m.key]),label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});});});}",
+"  if(v.bracket&&v.bracket.rounds){v.bracket.rounds.forEach(function(matches,r){matches.forEach(function(m,i){if(m.a!=null&&m.b!=null&&m.a!=='BYE'&&m.b!=='BYE'){var pf=t.playing?t.playing['br:'+m.key]:null;var isp=(!!pf&&typeof pf==='object'&&pf.a===m.a&&pf.b===m.b);q.push({type:'br',key:'br:'+m.key,a:m.a,b:m.b,ga:m.ga,gb:m.gb,finished:m.winner!=null,playing:isp,label:roundName(v.bracket.rounds.length,r)+circledNum(i+1)});}});});}",
 "  var cnt={};q.forEach(function(x){if(x.playing&&!x.finished){cnt[x.a]=(cnt[x.a]||0)+1;cnt[x.b]=(cnt[x.b]||0)+1;}});",
 "  q.forEach(function(x){if(x.playing&&!x.finished&&(cnt[x.a]>1||cnt[x.b]>1))x.conflict=true;});",
 "  return q;",
@@ -714,7 +715,7 @@ function scoreEdit(prefix,key,a,b){
 function stepWait(d){var el=document.getElementById('waitCount');var v=parseInt(el.value||'0',10)+d;if(v<0)v=0;if(v>20)v=20;el.value=v;}
 function stepCourt(d){var el=document.getElementById('courtCount');var v=parseInt(el.value||'0',10)+d;if(v<1)v=1;if(v>30)v=30;el.value=v;}
 function callWaitSave(){var el=document.getElementById('waitCount');var v=parseInt(el.value,10);if(isNaN(v)||v<0)v=0;if(v>20)v=20;T.waitCount=v;var ce=document.getElementById('courtCount');var cv=parseInt(ce.value,10);if(isNaN(cv)||cv<1)cv=1;if(cv>30)cv=30;T.courtCount=cv;save();}
-function playingToggle(key,on){if(!T.playing)T.playing={};if(on)T.playing[key]=true;else delete T.playing[key];save();}
+function playingToggle(key,on,a,b){if(!T.playing)T.playing={};if(on){if(key.indexOf('br:')===0&&a!=null&&b!=null)T.playing[key]={a:a,b:b};else T.playing[key]=true;}else delete T.playing[key];save();}
 function callScoreEdit(kind,key,a,b){
   var p=(kind==='lg')?'clg':'cbr';
   var ea=document.getElementById(p+'-'+key+'-a'),eb=document.getElementById(p+'-'+key+'-b');
@@ -736,7 +737,7 @@ function callSection(v){
   function row(m,checked,badge){
     var p=(m.type==='lg')?'clg':'cbr';var raw=m.key.slice(3);
     var inputs='<span class="scorein"><input type="number" id="'+p+'-'+raw+'-a" min="0" max="9" value="'+(m.ga==null?'':m.ga)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"> − <input type="number" id="'+p+'-'+raw+'-b" min="0" max="9" value="'+(m.gb==null?'':m.gb)+'" onchange="callScoreEdit(\\''+m.type+'\\',\\''+raw+'\\','+m.a+','+m.b+')"></span>';
-    return '<div class="matchline'+(m.conflict?' conflict':'')+'"><label style="flex:none"><input type="checkbox" '+(checked?'checked':'')+' onchange="playingToggle(\\''+m.key+'\\',this.checked)"> 試合中</label><span class="pairname"><span class="ctx">'+(badge?badge+'｜':'')+esc(m.label)+'</span>'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'+inputs+'<span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
+    return '<div class="matchline'+(m.conflict?' conflict':'')+'"><label style="flex:none"><input type="checkbox" '+(checked?'checked':'')+' onchange="playingToggle(\\''+m.key+'\\',this.checked,'+m.a+','+m.b+')"> 試合中</label><span class="pairname"><span class="ctx">'+(badge?badge+'｜':'')+esc(m.label)+'</span>'+pairName(T,m.a)+'<span class="team">'+pairTeam(T,m.a)+'</span></span>'+inputs+'<span class="pairname" style="text-align:right">'+pairName(T,m.b)+'<span class="team">'+pairTeam(T,m.b)+'</span></span></div>';
   }
   if(cl.conflicts&&cl.conflicts.length>0){
     var cnt={};cl.playing.forEach(function(m){cnt[m.a]=(cnt[m.a]||0)+1;cnt[m.b]=(cnt[m.b]||0)+1;});
